@@ -48,7 +48,7 @@ jobs:
               }
           }
 
-          async function loginAndBrowse(loginUrl, browseUrl, email, password) {
+          async function loginAndBrowse(loginUrl, browseUrl, username, password) {
               console.log("Launching browser...");
               const browser = await puppeteer.launch({
                   headless: "new",
@@ -66,7 +66,8 @@ jobs:
 
               // Stage 2: Fill in the login form.
               console.log("Filling in login credentials...");
-              await page.type('input[name="email"]', email, { delay: 100 });
+              // Note: The login form uses an 'email' field.
+              await page.type('input[name="email"]', username, { delay: 100 });
               await page.type('input[name="password"]', password, { delay: 100 });
               await safeScreenshot(page, `./screenshots/pubby_credentials_filled_${Date.now()}.png`);
 
@@ -105,14 +106,14 @@ jobs:
           async function run() {
               const loginUrl = process.env.PUBBY_LOGIN_URL || "https://account.pubby.co/login";
               const browseUrl = process.env.PUBBY_BROWSE_URL || "https://app.pubby.co/#/browse";
-              const email = process.env.PUBBY_EMAIL;
+              const username = process.env.PUBBY_USERNAME;
               const password = process.env.PUBBY_PASSWORD;
 
-              if (!email || !password) {
-                  console.error("Email and password must be provided via environment variables.");
+              if (!username || !password) {
+                  console.error("Username and password must be provided via environment variables.");
                   process.exit(1);
               }
-              await loginAndBrowse(loginUrl, browseUrl, email, password);
+              await loginAndBrowse(loginUrl, browseUrl, username, password);
           }
 
           run().catch(error => {
@@ -125,7 +126,7 @@ jobs:
         env:
           PUBBY_LOGIN_URL: "https://account.pubby.co/login"
           PUBBY_BROWSE_URL: "https://app.pubby.co/#/browse"
-          PUBBY_EMAIL: ${{ secrets.PUBBY_EMAIL }}
+          PUBBY_USERNAME: ${{ secrets.PUBBY_USERNAME }}
           PUBBY_PASSWORD: ${{ secrets.PUBBY_PASSWORD }}
         run: |
           echo "Logging in to: $PUBBY_LOGIN_URL and navigating to: $PUBBY_BROWSE_URL"
