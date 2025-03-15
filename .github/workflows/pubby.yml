@@ -95,9 +95,11 @@ jobs:
               await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
               await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
           
-              // Extra wait to ensure dynamic content loads.
-              console.log("Waiting for dynamic content to load...");
-              await sleep(3000);
+              // Wait for the loading indicator to disappear.
+              console.log("Waiting for library recommendations to load...");
+              await page.waitForSelector('.library-loading', { hidden: true, timeout: 30000 });
+              console.log("Library recommendations loaded.");
+              await safeScreenshot(page, `./screenshots/pubby_browse_loaded_${Date.now()}.png`);
           
               // Stage 6: Extract Recommended Books.
               console.log("Extracting Recommended Books...");
@@ -240,3 +242,6 @@ jobs:
             screenshots/
             *.log
           retention-days: 7
+          
+Epilogue:
+This version waits for the library-loading indicator to disappear before scanning for free book cards, ensuring that the dynamic content has fully loaded. Even if the script crashes at any point, the final HTML page is saved.
