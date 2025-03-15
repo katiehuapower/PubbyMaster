@@ -104,7 +104,8 @@ jobs:
                   freeTag.click();
                 }
               });
-              await sleep(3000);
+              // Wait a bit longer (10 seconds) after clicking the free filter.
+              await sleep(10000);
               await safeScreenshot(page, `./screenshots/pubby_free_filter_clicked_${Date.now()}.png`);
 
               // Stage 6: Wait for the books container to be visible.
@@ -212,6 +213,7 @@ jobs:
             } catch (error) {
               console.error("Script error:", error.message);
             } finally {
+              // Always save the final HTML of the browse page.
               if (page) {
                 try {
                   console.log("Saving final HTML of the browse page...");
