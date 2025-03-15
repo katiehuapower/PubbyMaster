@@ -1,4 +1,4 @@
-name: Pubby.co Login Automation
+name: Pubby.co Login and Browse Automation
 
 on:
   schedule:
@@ -23,10 +23,10 @@ jobs:
           npm init -y
           npm install puppeteer puppeteer-core puppeteer-extra puppeteer-extra-plugin-stealth fs
 
-      - name: Create Puppeteer login script
+      - name: Create Puppeteer script for Login and Browse
         run: |
           mkdir -p scripts screenshots
-          cat > scripts/pubby-login.js << 'EOL'
+          cat > scripts/pubby-login-and-browse.js << 'EOL'
           const puppeteer = require('puppeteer-extra');
           const StealthPlugin = require('puppeteer-extra-plugin-stealth');
           const fs = require('fs');
@@ -48,7 +48,7 @@ jobs:
               }
           }
 
-          async function loginPubby(loginUrl, username, password) {
+          async function loginAndBrowse(loginUrl, browseUrl, email, password) {
               console.log("Launching browser...");
               const browser = await puppeteer.launch({
                   headless: "new",
@@ -66,14 +66,12 @@ jobs:
 
               // Stage 2: Fill in the login form.
               console.log("Filling in login credentials...");
-              // Adjust these selectors to match pubby.co’s login form.
-              await page.type('input[name="username"]', username, { delay: 100 });
+              await page.type('input[name="email"]', email, { delay: 100 });
               await page.type('input[name="password"]', password, { delay: 100 });
               await safeScreenshot(page, `./screenshots/pubby_credentials_filled_${Date.now()}.png`);
 
               // Stage 3: Submit the login form.
               console.log("Clicking the login button...");
-              // Adjust selector as needed – here we assume a button of type submit.
               await Promise.all([
                   page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
                   page.click('button[type="submit"]')
@@ -82,8 +80,7 @@ jobs:
 
               // Stage 4: Verify login success.
               console.log("Verifying login status...");
-              // For example, look for a dashboard element or a logout link.
-              const dashboard = await page.$('.dashboard, a.logout');
+              const dashboard = await page.$('a.logout, .dashboard');
               if (dashboard) {
                   console.log("Login successful.");
               } else {
@@ -91,7 +88,12 @@ jobs:
                   await safeScreenshot(page, `./screenshots/pubby_login_failed_${Date.now()}.png`);
               }
 
-              // Save the final HTML.
+              // Stage 5: Navigate to the browse page.
+              console.log("Navigating to browse page:", browseUrl);
+              await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+              await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
+
+              // Stage 6: Save the final HTML of the browse page.
               const finalHtml = await page.content();
               const htmlFile = `./screenshots/pubby_final_page_${Date.now()}.html`;
               fs.writeFileSync(htmlFile, finalHtml);
@@ -101,15 +103,16 @@ jobs:
           }
 
           async function run() {
-              const loginUrl = process.env.PUBBY_LOGIN_URL || "https://pubby.co/login";
-              const username = process.env.PUBBY_USERNAME;
+              const loginUrl = process.env.PUBBY_LOGIN_URL || "https://account.pubby.co/login";
+              const browseUrl = process.env.PUBBY_BROWSE_URL || "https://app.pubby.co/#/browse";
+              const email = process.env.PUBBY_EMAIL;
               const password = process.env.PUBBY_PASSWORD;
 
-              if (!username || !password) {
-                  console.error("Username and password must be provided via environment variables.");
+              if (!email || !password) {
+                  console.error("Email and password must be provided via environment variables.");
                   process.exit(1);
               }
-              await loginPubby(loginUrl, username, password);
+              await loginAndBrowse(loginUrl, browseUrl, email, password);
           }
 
           run().catch(error => {
@@ -118,14 +121,15 @@ jobs:
           });
           EOL
 
-      - name: Run Puppeteer login script
+      - name: Run Puppeteer login and browse script
         env:
-          PUBBY_LOGIN_URL: ${{ github.event.inputs.login_url || 'https://pubby.co/login' }}
-          PUBBY_USERNAME: ${{ secrets.PUBBY_USERNAME }}
+          PUBBY_LOGIN_URL: "https://account.pubby.co/login"
+          PUBBY_BROWSE_URL: "https://app.pubby.co/#/browse"
+          PUBBY_EMAIL: ${{ secrets.PUBBY_EMAIL }}
           PUBBY_PASSWORD: ${{ secrets.PUBBY_PASSWORD }}
         run: |
-          echo "Logging in to: $PUBBY_LOGIN_URL"
-          node scripts/pubby-login.js | tee script_output.log
+          echo "Logging in to: $PUBBY_LOGIN_URL and navigating to: $PUBBY_BROWSE_URL"
+          node scripts/pubby-login-and-browse.js | tee script_output.log
 
       - name: Upload debug artifacts
         if: always()
