@@ -95,7 +95,7 @@ jobs:
               await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
               await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
           
-              // Wait for the loading indicator to disappear.
+              // Wait for the library-loading indicator to disappear.
               console.log("Waiting for library recommendations to load...");
               await page.waitForSelector('.library-loading', { hidden: true, timeout: 30000 });
               console.log("Library recommendations loaded.");
@@ -242,6 +242,3 @@ jobs:
             screenshots/
             *.log
           retention-days: 7
-          
-Epilogue:
-This version waits for the library-loading indicator to disappear before scanning for free book cards, ensuring that the dynamic content has fully loaded. Even if the script crashes at any point, the final HTML page is saved.
