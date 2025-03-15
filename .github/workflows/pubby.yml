@@ -149,11 +149,11 @@ jobs:
               }
 
               // Stage 8: Extract Recommended Books.
+              // Only select the free book card by filtering for the current page.
               console.log("Extracting Recommended Books...");
               const recommendedBooks = await page.evaluate(() => {
                 const books = [];
-                // Extract from page labels.
-                document.querySelectorAll('.pages-container .page-label').forEach(label => {
+                document.querySelectorAll('.pages-container .page-label.current-page').forEach(label => {
                   const titleElement = label.querySelector('.page-label-text span') || label.querySelector('.page-label-text');
                   if (titleElement && titleElement.innerText.trim().length > 0) {
                     books.push(titleElement.innerText.trim());
@@ -161,22 +161,6 @@ jobs:
                 });
                 return books;
               });
-              console.log("Books from page labels:", recommendedBooks);
-
-              // Additionally, check for a free book card in the assignment section.
-              const freeBook = await page.evaluate(() => {
-                const card = document.querySelector('.card.single');
-                if (card) {
-                  const title = card.querySelector('.title .title-text')?.innerText.trim() || '';
-                  const subtitle = card.querySelector('.title .subtitle-text')?.innerText.trim() || '';
-                  return title ? (subtitle ? `${title}: ${subtitle}` : title) : null;
-                }
-                return null;
-              });
-              if (freeBook && !recommendedBooks.includes(freeBook)) {
-                console.log("Free book card detected:", freeBook);
-                recommendedBooks.unshift(freeBook);
-              }
               console.log("Final Recommended Books:", recommendedBooks);
               await safeScreenshot(page, `./screenshots/pubby_books_extracted_${Date.now()}.png`);
 
