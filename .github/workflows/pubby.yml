@@ -1,0 +1,138 @@
+name: Pubby.co Login Automation
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # Run every 10 minutes
+  workflow_dispatch:
+
+jobs:
+  login-pubby:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install puppeteer puppeteer-core puppeteer-extra puppeteer-extra-plugin-stealth fs
+
+      - name: Create Puppeteer login script
+        run: |
+          mkdir -p scripts screenshots
+          cat > scripts/pubby-login.js << 'EOL'
+          const puppeteer = require('puppeteer-extra');
+          const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+          const fs = require('fs');
+
+          puppeteer.use(StealthPlugin());
+
+          // Helper sleep function.
+          function sleep(ms) {
+              return new Promise(resolve => setTimeout(resolve, ms));
+          }
+
+          // Helper function to safely take a screenshot.
+          async function safeScreenshot(page, path) {
+              try {
+                  await page.screenshot({ path });
+                  console.log(`Screenshot taken: ${path}`);
+              } catch (err) {
+                  console.error(`Failed to take screenshot ${path}: ${err.message}`);
+              }
+          }
+
+          async function loginPubby(loginUrl, username, password) {
+              console.log("Launching browser...");
+              const browser = await puppeteer.launch({
+                  headless: "new",
+                  args: [
+                      '--no-sandbox',
+                      '--disable-setuid-sandbox'
+                  ]
+              });
+              const page = await browser.newPage();
+
+              // Stage 1: Navigate to the login page.
+              console.log("Navigating to login page:", loginUrl);
+              await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+              await safeScreenshot(page, `./screenshots/pubby_home_${Date.now()}.png`);
+
+              // Stage 2: Fill in the login form.
+              console.log("Filling in login credentials...");
+              // Adjust these selectors to match pubby.co’s login form.
+              await page.type('input[name="username"]', username, { delay: 100 });
+              await page.type('input[name="password"]', password, { delay: 100 });
+              await safeScreenshot(page, `./screenshots/pubby_credentials_filled_${Date.now()}.png`);
+
+              // Stage 3: Submit the login form.
+              console.log("Clicking the login button...");
+              // Adjust selector as needed – here we assume a button of type submit.
+              await Promise.all([
+                  page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
+                  page.click('button[type="submit"]')
+              ]);
+              await safeScreenshot(page, `./screenshots/pubby_after_login_${Date.now()}.png`);
+
+              // Stage 4: Verify login success.
+              console.log("Verifying login status...");
+              // For example, look for a dashboard element or a logout link.
+              const dashboard = await page.$('.dashboard, a.logout');
+              if (dashboard) {
+                  console.log("Login successful.");
+              } else {
+                  console.warn("Login may have failed. Dashboard element not found.");
+                  await safeScreenshot(page, `./screenshots/pubby_login_failed_${Date.now()}.png`);
+              }
+
+              // Save the final HTML.
+              const finalHtml = await page.content();
+              const htmlFile = `./screenshots/pubby_final_page_${Date.now()}.html`;
+              fs.writeFileSync(htmlFile, finalHtml);
+              console.log(`Final HTML saved: ${htmlFile}`);
+
+              await browser.close();
+          }
+
+          async function run() {
+              const loginUrl = process.env.PUBBY_LOGIN_URL || "https://pubby.co/login";
+              const username = process.env.PUBBY_USERNAME;
+              const password = process.env.PUBBY_PASSWORD;
+
+              if (!username || !password) {
+                  console.error("Username and password must be provided via environment variables.");
+                  process.exit(1);
+              }
+              await loginPubby(loginUrl, username, password);
+          }
+
+          run().catch(error => {
+              console.error("Script failed:", error.message);
+              process.exit(1);
+          });
+          EOL
+
+      - name: Run Puppeteer login script
+        env:
+          PUBBY_LOGIN_URL: ${{ github.event.inputs.login_url || 'https://pubby.co/login' }}
+          PUBBY_USERNAME: ${{ secrets.PUBBY_USERNAME }}
+          PUBBY_PASSWORD: ${{ secrets.PUBBY_PASSWORD }}
+        run: |
+          echo "Logging in to: $PUBBY_LOGIN_URL"
+          node scripts/pubby-login.js | tee script_output.log
+
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pubby-debug-artifacts
+          path: |
+            screenshots/
+            *.log
+          retention-days: 7
