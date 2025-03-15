@@ -93,6 +93,8 @@ jobs:
               // Stage 5: Navigate to the browse page.
               console.log("Navigating to browse page:", browseUrl);
               await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+              // Wait for 10 seconds before making pubby browse screenshot.
+              await sleep(10000);
               await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
 
               // Stage 5.5: Click the free filter button with increased verbosity.
