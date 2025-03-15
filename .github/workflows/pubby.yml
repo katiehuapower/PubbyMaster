@@ -93,7 +93,7 @@ jobs:
             await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
             await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
           
-            // Extra wait to ensure dynamic content loads
+            // Extra wait to ensure dynamic content loads.
             console.log("Waiting for dynamic content to load...");
             await sleep(3000);
           
@@ -131,7 +131,21 @@ jobs:
           
             // Stage 8: Find a free book card, click it, then click "Pick Book".
             console.log("Scanning for free book cards...");
-            const freeCardElements = await page.$x("//div[contains(@class, 'card') and .//div[contains(@class, 'free')] and contains(., 'Free Download')]");
+            const freeCardHandle = await page.evaluateHandle((xpath) => {
+              const results = [];
+              const query = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+              for (let i = 0; i < query.snapshotLength; i++) {
+                results.push(query.snapshotItem(i));
+              }
+              return results;
+            }, "//div[contains(@class, 'card') and .//div[contains(@class, 'free')] and contains(., 'Free Download')]");
+            const freeCardProps = await freeCardHandle.getProperties();
+            const freeCardElements = [];
+            for (const property of freeCardProps.values()) {
+              const element = property.asElement();
+              if (element)
+                freeCardElements.push(element);
+            }
             if (freeCardElements.length > 0) {
               console.log("Free book card found. Clicking the card...");
               await freeCardElements[0].click();
@@ -139,10 +153,24 @@ jobs:
               await safeScreenshot(page, `./screenshots/pubby_free_card_clicked_${Date.now()}.png`);
           
               console.log("Looking for 'Pick Book' button...");
-              const pickBookButtons = await page.$x("//div[contains(@class, 'action') and contains(@class, 'action-blue') and normalize-space(text())='Pick Book']");
-              if (pickBookButtons.length > 0) {
+              const pickBookHandle = await page.evaluateHandle((xpath) => {
+                const results = [];
+                const query = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                for (let i = 0; i < query.snapshotLength; i++) {
+                  results.push(query.snapshotItem(i));
+                }
+                return results;
+              }, "//div[contains(@class, 'action') and contains(@class, 'action-blue') and normalize-space(text())='Pick Book']");
+              const pickBookProps = await pickBookHandle.getProperties();
+              const pickBookElements = [];
+              for (const property of pickBookProps.values()) {
+                const element = property.asElement();
+                if (element)
+                  pickBookElements.push(element);
+              }
+              if (pickBookElements.length > 0) {
                 console.log("'Pick Book' button found. Clicking...");
-                await pickBookButtons[0].click();
+                await pickBookElements[0].click();
                 await sleep(2000);
                 await safeScreenshot(page, `./screenshots/pubby_pick_book_clicked_${Date.now()}.png`);
               } else {
