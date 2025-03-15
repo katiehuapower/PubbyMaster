@@ -1,4 +1,4 @@
-name: Pubby.co Login, Browse & Data Extraction Automation
+name: Pubby.co Login, Browse & Pick Free Book Automation
 
 on:
   schedule:
@@ -23,21 +23,21 @@ jobs:
           npm init -y
           npm install puppeteer puppeteer-core puppeteer-extra puppeteer-extra-plugin-stealth fs
 
-      - name: Create Puppeteer script for Login, Browse & Extraction
+      - name: Create Puppeteer script for Login, Browse & Pick Free Book
         run: |
           mkdir -p scripts screenshots
           cat > scripts/pubby-login-and-browse.js << 'EOL'
           const puppeteer = require('puppeteer-extra');
           const StealthPlugin = require('puppeteer-extra-plugin-stealth');
           const fs = require('fs');
-
+          
           puppeteer.use(StealthPlugin());
-
+          
           // Helper sleep function.
           function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
           }
-
+          
           // Helper function to safely take a screenshot.
           async function safeScreenshot(page, path) {
             try {
@@ -47,7 +47,7 @@ jobs:
               console.error(`Failed to take screenshot ${path}: ${err.message}`);
             }
           }
-
+          
           async function loginAndBrowse(loginUrl, browseUrl, username, password) {
             console.log("Launching browser...");
             const browser = await puppeteer.launch({
@@ -58,18 +58,18 @@ jobs:
               ]
             });
             const page = await browser.newPage();
-
+          
             // Stage 1: Navigate to the login page.
             console.log("Navigating to login page:", loginUrl);
             await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
             await safeScreenshot(page, `./screenshots/pubby_home_${Date.now()}.png`);
-
+          
             // Stage 2: Fill in the login form.
             console.log("Filling in login credentials...");
             await page.type('input[name="email"]', username, { delay: 100 });
             await page.type('input[name="password"]', password, { delay: 100 });
             await safeScreenshot(page, `./screenshots/pubby_credentials_filled_${Date.now()}.png`);
-
+          
             // Stage 3: Submit the login form.
             console.log("Clicking the login button...");
             await Promise.all([
@@ -77,7 +77,7 @@ jobs:
               page.click('button[type="submit"]')
             ]);
             await safeScreenshot(page, `./screenshots/pubby_after_login_${Date.now()}.png`);
-
+          
             // Stage 4: Verify login status.
             console.log("Verifying login status...");
             const dashboard = await page.$('a.logout, .dashboard');
@@ -87,12 +87,12 @@ jobs:
               console.warn("Login may have failed. Dashboard element not found.");
               await safeScreenshot(page, `./screenshots/pubby_login_failed_${Date.now()}.png`);
             }
-
+          
             // Stage 5: Navigate to the browse page.
             console.log("Navigating to browse page:", browseUrl);
             await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
             await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
-
+          
             // Stage 6: Extract Recommended Books.
             console.log("Extracting Recommended Books...");
             const recommendedBooks = await page.evaluate(() => {
@@ -107,7 +107,7 @@ jobs:
             });
             console.log("Recommended Books:", recommendedBooks);
             await safeScreenshot(page, `./screenshots/pubby_books_extracted_${Date.now()}.png`);
-
+          
             // Stage 7: Extract Activity Timeline.
             console.log("Extracting Activity Timeline...");
             const activityTimeline = await page.evaluate(() => {
@@ -124,44 +124,52 @@ jobs:
             });
             console.log("Activity Timeline:", activityTimeline);
             await safeScreenshot(page, `./screenshots/pubby_activity_extracted_${Date.now()}.png`);
-
-            // Stage 8: Simulate "Add Book" click (non-destructive).
-            console.log("Simulating Add Book click...");
-            const addBookButton = await page.$('.add-book-container .add-book');
-            if (addBookButton) {
-              await addBookButton.click();
-              await sleep(2000); // Wait for the modal to appear.
-              await safeScreenshot(page, `./screenshots/pubby_add_book_modal_${Date.now()}.png`);
-              // Close the modal by pressing 'Escape'
-              await page.keyboard.press('Escape');
-              await sleep(1000);
-              await safeScreenshot(page, `./screenshots/pubby_modal_closed_${Date.now()}.png`);
+          
+            // Stage 8: Find a free book card, click it, then click "Pick Book".
+            console.log("Scanning for free book cards...");
+            const freeCardElements = await page.$x("//div[contains(@class, 'card') and .//div[contains(@class, 'free')] and contains(., 'Free Download')]");
+            if (freeCardElements.length > 0) {
+              console.log("Free book card found. Clicking the card...");
+              await freeCardElements[0].click();
+              await sleep(2000); // Wait for card details to load.
+              await safeScreenshot(page, `./screenshots/pubby_free_card_clicked_${Date.now()}.png`);
+          
+              console.log("Looking for 'Pick Book' button...");
+              const pickBookButtons = await page.$x("//div[contains(@class, 'action') and contains(@class, 'action-blue') and normalize-space(text())='Pick Book']");
+              if (pickBookButtons.length > 0) {
+                console.log("'Pick Book' button found. Clicking...");
+                await pickBookButtons[0].click();
+                await sleep(2000);
+                await safeScreenshot(page, `./screenshots/pubby_pick_book_clicked_${Date.now()}.png`);
+              } else {
+                console.log("'Pick Book' button not found after clicking the free book card.");
+              }
             } else {
-              console.log("Add Book button not found.");
+              console.log("No free book card found.");
             }
-
+          
             // Stage 9: Save final HTML of the browse page.
             const finalHtml = await page.content();
             const htmlFile = `./screenshots/pubby_final_page_${Date.now()}.html`;
             fs.writeFileSync(htmlFile, finalHtml);
             console.log(`Final HTML saved: ${htmlFile}`);
-
+          
             await browser.close();
           }
-
+          
           async function run() {
             const loginUrl = process.env.PUBBY_LOGIN_URL || "https://account.pubby.co/login";
             const browseUrl = process.env.PUBBY_BROWSE_URL || "https://app.pubby.co/#/browse";
             const username = process.env.PUBBY_USERNAME;
             const password = process.env.PUBBY_PASSWORD;
-
+          
             if (!username || !password) {
               console.error("Username and password must be provided via environment variables.");
               process.exit(1);
             }
             await loginAndBrowse(loginUrl, browseUrl, username, password);
           }
-
+          
           run().catch(error => {
             console.error("Script failed:", error.message);
             process.exit(1);
