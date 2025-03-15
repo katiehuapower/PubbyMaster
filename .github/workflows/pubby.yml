@@ -95,17 +95,29 @@ jobs:
               await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
               await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
 
-              // Wait for the books container to be visible.
+              // Stage 5.5: Click the free filter button.
+              console.log("Clicking the free filter button...");
+              await page.evaluate(() => {
+                const tags = Array.from(document.querySelectorAll('.browsing-tag'));
+                const freeTag = tags.find(tag => tag.innerText.trim() === "Free");
+                if (freeTag) {
+                  freeTag.click();
+                }
+              });
+              await sleep(3000);
+              await safeScreenshot(page, `./screenshots/pubby_free_filter_clicked_${Date.now()}.png`);
+
+              // Stage 6: Wait for the books container to be visible.
               console.log("Waiting for the books container to appear...");
               await page.waitForSelector('.library-books-container', { visible: true, timeout: 60000 });
               console.log("Books container loaded.");
               await safeScreenshot(page, `./screenshots/pubby_browse_loaded_${Date.now()}.png`);
 
-              // Extended wait to ensure books truly load
+              // Extended wait to ensure content loads.
               console.log("Extended wait for content...");
               await sleep(5000);
 
-              // Stage 6: Scroll down multiple times to load more books
+              // Stage 7: Scroll down multiple times to load more books.
               for (let i = 0; i < 3; i++) {
                 console.log(`Scrolling down, iteration ${i+1}`);
                 await page.evaluate(() => {
@@ -115,7 +127,7 @@ jobs:
                 await safeScreenshot(page, `./screenshots/pubby_scroll_${i+1}_${Date.now()}.png`);
               }
 
-              // Stage 7: Extract Recommended Books.
+              // Stage 8: Extract Recommended Books.
               console.log("Extracting Recommended Books...");
               const recommendedBooks = await page.evaluate(() => {
                 const books = [];
@@ -130,7 +142,7 @@ jobs:
               console.log("Recommended Books:", recommendedBooks);
               await safeScreenshot(page, `./screenshots/pubby_books_extracted_${Date.now()}.png`);
 
-              // Stage 8: Extract Activity Timeline.
+              // Stage 9: Extract Activity Timeline.
               console.log("Extracting Activity Timeline...");
               const activityTimeline = await page.evaluate(() => {
                 const events = [];
@@ -147,7 +159,7 @@ jobs:
               console.log("Activity Timeline:", activityTimeline);
               await safeScreenshot(page, `./screenshots/pubby_activity_extracted_${Date.now()}.png`);
 
-              // Stage 9: Find a free book card, click it, then click "Pick Book".
+              // Stage 10: Find a free book card, click it, then click "Pick Book".
               console.log("Scanning for free book cards...");
               const freeCardHandle = await page.evaluateHandle((xpath) => {
                 const results = [];
@@ -167,7 +179,7 @@ jobs:
               if (freeCardElements.length > 0) {
                 console.log("Free book card found. Clicking the card...");
                 await freeCardElements[0].click();
-                await sleep(2000); // Wait for card details to load.
+                await sleep(2000);
                 await safeScreenshot(page, `./screenshots/pubby_free_card_clicked_${Date.now()}.png`);
 
                 console.log("Looking for 'Pick Book' button...");
@@ -200,7 +212,6 @@ jobs:
             } catch (error) {
               console.error("Script error:", error.message);
             } finally {
-              // Always save final HTML of the browse page.
               if (page) {
                 try {
                   console.log("Saving final HTML of the browse page...");
