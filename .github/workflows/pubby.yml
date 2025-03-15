@@ -93,19 +93,41 @@ jobs:
               // Stage 5: Navigate to the browse page.
               console.log("Navigating to browse page:", browseUrl);
               await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+              // Wait for 10 seconds before making pubby browse screenshot.
+              await sleep(10000);
               await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
 
-              // Stage 5.5: Click the free filter button.
-              console.log("Clicking the free filter button...");
-              await page.evaluate(() => {
+              // Stage 5.5: Click the free filter button with increased verbosity.
+              console.log("Attempting to locate the free filter button...");
+              const freeFilterClicked = await page.evaluate(() => {
                 const tags = Array.from(document.querySelectorAll('.browsing-tag'));
                 const freeTag = tags.find(tag => tag.innerText.trim() === "Free");
                 if (freeTag) {
+                  console.log("Free filter button found. Clicking it...");
                   freeTag.click();
+                  return true;
+                } else {
+                  console.log("Free filter button NOT found.");
+                  return false;
                 }
               });
-              // Wait a bit longer (10 seconds) after clicking the free filter.
+              if (freeFilterClicked) {
+                console.log("Free filter button clicked successfully. Waiting for 'Free Download' text to appear...");
+              } else {
+                console.error("ERROR: Free filter button was not found on the page.");
+              }
+              // Wait for 10 seconds after clicking free filter.
               await sleep(10000);
+              // Check if 'Free Download' text appears on the page.
+              const freeDownloadFound = await page.evaluate(() => {
+                const bodyText = document.body.innerText;
+                return bodyText.includes('Free Download');
+              });
+              if (freeDownloadFound) {
+                console.log("'Free Download' text found on the page.");
+              } else {
+                console.error("ERROR: 'Free Download' text NOT found after clicking free filter.");
+              }
               await safeScreenshot(page, `./screenshots/pubby_free_filter_clicked_${Date.now()}.png`);
 
               // Stage 6: Wait for the books container to be visible.
