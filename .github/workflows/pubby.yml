@@ -1,4 +1,4 @@
-name: Pubby.co Login and Browse Automation
+name: Pubby.co Login, Browse & Data Extraction Automation
 
 on:
   schedule:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Node.js
@@ -23,7 +23,7 @@ jobs:
           npm init -y
           npm install puppeteer puppeteer-core puppeteer-extra puppeteer-extra-plugin-stealth fs
 
-      - name: Create Puppeteer script for Login and Browse
+      - name: Create Puppeteer script for Login, Browse & Extraction
         run: |
           mkdir -p scripts screenshots
           cat > scripts/pubby-login-and-browse.js << 'EOL'
@@ -35,94 +35,140 @@ jobs:
 
           // Helper sleep function.
           function sleep(ms) {
-              return new Promise(resolve => setTimeout(resolve, ms));
+            return new Promise(resolve => setTimeout(resolve, ms));
           }
 
           // Helper function to safely take a screenshot.
           async function safeScreenshot(page, path) {
-              try {
-                  await page.screenshot({ path });
-                  console.log(`Screenshot taken: ${path}`);
-              } catch (err) {
-                  console.error(`Failed to take screenshot ${path}: ${err.message}`);
-              }
+            try {
+              await page.screenshot({ path });
+              console.log(`Screenshot taken: ${path}`);
+            } catch (err) {
+              console.error(`Failed to take screenshot ${path}: ${err.message}`);
+            }
           }
 
           async function loginAndBrowse(loginUrl, browseUrl, username, password) {
-              console.log("Launching browser...");
-              const browser = await puppeteer.launch({
-                  headless: "new",
-                  args: [
-                      '--no-sandbox',
-                      '--disable-setuid-sandbox'
-                  ]
+            console.log("Launching browser...");
+            const browser = await puppeteer.launch({
+              headless: "new",
+              args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox'
+              ]
+            });
+            const page = await browser.newPage();
+
+            // Stage 1: Navigate to the login page.
+            console.log("Navigating to login page:", loginUrl);
+            await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+            await safeScreenshot(page, `./screenshots/pubby_home_${Date.now()}.png`);
+
+            // Stage 2: Fill in the login form.
+            console.log("Filling in login credentials...");
+            await page.type('input[name="email"]', username, { delay: 100 });
+            await page.type('input[name="password"]', password, { delay: 100 });
+            await safeScreenshot(page, `./screenshots/pubby_credentials_filled_${Date.now()}.png`);
+
+            // Stage 3: Submit the login form.
+            console.log("Clicking the login button...");
+            await Promise.all([
+              page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
+              page.click('button[type="submit"]')
+            ]);
+            await safeScreenshot(page, `./screenshots/pubby_after_login_${Date.now()}.png`);
+
+            // Stage 4: Verify login status.
+            console.log("Verifying login status...");
+            const dashboard = await page.$('a.logout, .dashboard');
+            if (dashboard) {
+              console.log("Login successful.");
+            } else {
+              console.warn("Login may have failed. Dashboard element not found.");
+              await safeScreenshot(page, `./screenshots/pubby_login_failed_${Date.now()}.png`);
+            }
+
+            // Stage 5: Navigate to the browse page.
+            console.log("Navigating to browse page:", browseUrl);
+            await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+            await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
+
+            // Stage 6: Extract Recommended Books.
+            console.log("Extracting Recommended Books...");
+            const recommendedBooks = await page.evaluate(() => {
+              const books = [];
+              document.querySelectorAll('.pages-container .page-label').forEach(label => {
+                const titleElement = label.querySelector('.page-label-text span') || label.querySelector('.page-label-text');
+                if (titleElement && titleElement.innerText.trim().length > 0) {
+                  books.push(titleElement.innerText.trim());
+                }
               });
-              const page = await browser.newPage();
+              return books;
+            });
+            console.log("Recommended Books:", recommendedBooks);
+            await safeScreenshot(page, `./screenshots/pubby_books_extracted_${Date.now()}.png`);
 
-              // Stage 1: Navigate to the login page.
-              console.log("Navigating to login page:", loginUrl);
-              await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-              await safeScreenshot(page, `./screenshots/pubby_home_${Date.now()}.png`);
+            // Stage 7: Extract Activity Timeline.
+            console.log("Extracting Activity Timeline...");
+            const activityTimeline = await page.evaluate(() => {
+              const events = [];
+              document.querySelectorAll('.timeline .event').forEach(event => {
+                const contentEl = event.querySelector('.content');
+                const timeEl = event.querySelector('.time');
+                events.push({
+                  content: contentEl ? contentEl.innerText.trim() : '',
+                  time: timeEl ? timeEl.innerText.trim() : ''
+                });
+              });
+              return events;
+            });
+            console.log("Activity Timeline:", activityTimeline);
+            await safeScreenshot(page, `./screenshots/pubby_activity_extracted_${Date.now()}.png`);
 
-              // Stage 2: Fill in the login form.
-              console.log("Filling in login credentials...");
-              // Note: The login form uses an 'email' field.
-              await page.type('input[name="email"]', username, { delay: 100 });
-              await page.type('input[name="password"]', password, { delay: 100 });
-              await safeScreenshot(page, `./screenshots/pubby_credentials_filled_${Date.now()}.png`);
+            // Stage 8: Simulate "Add Book" click (non-destructive).
+            console.log("Simulating Add Book click...");
+            const addBookButton = await page.$('.add-book-container .add-book');
+            if (addBookButton) {
+              await addBookButton.click();
+              await sleep(2000); // Wait for the modal to appear.
+              await safeScreenshot(page, `./screenshots/pubby_add_book_modal_${Date.now()}.png`);
+              // Close the modal by pressing 'Escape'
+              await page.keyboard.press('Escape');
+              await sleep(1000);
+              await safeScreenshot(page, `./screenshots/pubby_modal_closed_${Date.now()}.png`);
+            } else {
+              console.log("Add Book button not found.");
+            }
 
-              // Stage 3: Submit the login form.
-              console.log("Clicking the login button...");
-              await Promise.all([
-                  page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
-                  page.click('button[type="submit"]')
-              ]);
-              await safeScreenshot(page, `./screenshots/pubby_after_login_${Date.now()}.png`);
+            // Stage 9: Save final HTML of the browse page.
+            const finalHtml = await page.content();
+            const htmlFile = `./screenshots/pubby_final_page_${Date.now()}.html`;
+            fs.writeFileSync(htmlFile, finalHtml);
+            console.log(`Final HTML saved: ${htmlFile}`);
 
-              // Stage 4: Verify login success.
-              console.log("Verifying login status...");
-              const dashboard = await page.$('a.logout, .dashboard');
-              if (dashboard) {
-                  console.log("Login successful.");
-              } else {
-                  console.warn("Login may have failed. Dashboard element not found.");
-                  await safeScreenshot(page, `./screenshots/pubby_login_failed_${Date.now()}.png`);
-              }
-
-              // Stage 5: Navigate to the browse page.
-              console.log("Navigating to browse page:", browseUrl);
-              await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-              await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
-
-              // Stage 6: Save the final HTML of the browse page.
-              const finalHtml = await page.content();
-              const htmlFile = `./screenshots/pubby_final_page_${Date.now()}.html`;
-              fs.writeFileSync(htmlFile, finalHtml);
-              console.log(`Final HTML saved: ${htmlFile}`);
-
-              await browser.close();
+            await browser.close();
           }
 
           async function run() {
-              const loginUrl = process.env.PUBBY_LOGIN_URL || "https://account.pubby.co/login";
-              const browseUrl = process.env.PUBBY_BROWSE_URL || "https://app.pubby.co/#/browse";
-              const username = process.env.PUBBY_USERNAME;
-              const password = process.env.PUBBY_PASSWORD;
+            const loginUrl = process.env.PUBBY_LOGIN_URL || "https://account.pubby.co/login";
+            const browseUrl = process.env.PUBBY_BROWSE_URL || "https://app.pubby.co/#/browse";
+            const username = process.env.PUBBY_USERNAME;
+            const password = process.env.PUBBY_PASSWORD;
 
-              if (!username || !password) {
-                  console.error("Username and password must be provided via environment variables.");
-                  process.exit(1);
-              }
-              await loginAndBrowse(loginUrl, browseUrl, username, password);
+            if (!username || !password) {
+              console.error("Username and password must be provided via environment variables.");
+              process.exit(1);
+            }
+            await loginAndBrowse(loginUrl, browseUrl, username, password);
           }
 
           run().catch(error => {
-              console.error("Script failed:", error.message);
-              process.exit(1);
+            console.error("Script failed:", error.message);
+            process.exit(1);
           });
           EOL
 
-      - name: Run Puppeteer login and browse script
+      - name: Run Puppeteer script
         env:
           PUBBY_LOGIN_URL: "https://account.pubby.co/login"
           PUBBY_BROWSE_URL: "https://app.pubby.co/#/browse"
