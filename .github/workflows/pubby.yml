@@ -1,4 +1,4 @@
-name: Pubby.co Login, Browse & Pick Free Book Automation
+name: Pubby.co Login, Browse & Pick Kindle Unlimited Book Automation (Most Snaps)
 
 on:
   schedule:
@@ -23,7 +23,7 @@ jobs:
           npm init -y
           npm install puppeteer puppeteer-core puppeteer-extra puppeteer-extra-plugin-stealth fs
 
-      - name: Create Puppeteer script for Login, Browse & Pick Free Book
+      - name: Create Puppeteer script for Login, Browse & Pick Kindle Unlimited Book (Most Snaps)
         run: |
           mkdir -p scripts screenshots
           cat > scripts/pubby-login-and-browse.js << 'EOL'
@@ -97,38 +97,51 @@ jobs:
               await sleep(10000);
               await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
 
-              // Stage 5.5: Click the free filter button with increased verbosity.
-              console.log("Attempting to locate the free filter button...");
-              const freeFilterClicked = await page.evaluate(() => {
-                const tags = Array.from(document.querySelectorAll('.browsing-tag'));
-                const freeTag = tags.find(tag => tag.innerText.trim() === "Free");
-                if (freeTag) {
-                  console.log("Free filter button found. Clicking it...");
-                  freeTag.click();
+              // Stage 5.5: Click the "Kindle Unlimited" filter button.
+              console.log("Attempting to locate the 'Kindle Unlimited' filter button...");
+              const kindleUnlimitedFilterClicked = await page.evaluate(() => {
+                const tags = Array.from(document.querySelectorAll('.Browse-tag'));
+                const kindleUnlimitedTag = tags.find(tag => tag.innerText.trim() === "Kindle Unlimited");
+                if (kindleUnlimitedTag) {
+                  console.log("'Kindle Unlimited' filter button found. Clicking it...");
+                  kindleUnlimitedTag.click();
                   return true;
                 } else {
-                  console.log("Free filter button NOT found.");
+                  console.log("'Kindle Unlimited' filter button NOT found.");
                   return false;
                 }
               });
-              if (freeFilterClicked) {
-                console.log("Free filter button clicked successfully. Waiting for 'Free Download' text to appear...");
+              if (kindleUnlimitedFilterClicked) {
+                console.log("'Kindle Unlimited' filter button clicked successfully. Waiting for page update...");
               } else {
-                console.error("ERROR: Free filter button was not found on the page.");
+                console.error("ERROR: 'Kindle Unlimited' filter button was not found on the page.");
               }
-              // Wait for 10 seconds after clicking free filter.
-              await sleep(10000);
-              // Check if 'Free Download' text appears on the page.
-              const freeDownloadFound = await page.evaluate(() => {
-                const bodyText = document.body.innerText;
-                return bodyText.includes('Free Download');
+              // Wait for 5 seconds after clicking filter.
+              await sleep(5000);
+              await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_filter_clicked_${Date.now()}.png`);
+
+              // Stage 5.6: Click the "Most Snaps" filter button.
+              console.log("Attempting to locate the 'Most Snaps' filter button...");
+              const mostSnapsFilterClicked = await page.evaluate(() => {
+                const tags = Array.from(document.querySelectorAll('.Browse-tag'));
+                const mostSnapsTag = tags.find(tag => tag.innerText.trim() === "Most Snaps");
+                if (mostSnapsTag) {
+                  console.log("'Most Snaps' filter button found. Clicking it...");
+                  mostSnapsTag.click();
+                  return true;
+                } else {
+                  console.log("'Most Snaps' filter button NOT found.");
+                  return false;
+                }
               });
-              if (freeDownloadFound) {
-                console.log("'Free Download' text found on the page.");
+              if (mostSnapsFilterClicked) {
+                console.log("'Most Snaps' filter button clicked successfully. Waiting for page update...");
               } else {
-                console.error("ERROR: 'Free Download' text NOT found after clicking free filter.");
+                console.error("ERROR: 'Most Snaps' filter button was not found on the page.");
               }
-              await safeScreenshot(page, `./screenshots/pubby_free_filter_clicked_${Date.now()}.png`);
+              // Wait for 10 seconds after clicking Most Snaps filter.
+              await sleep(10000);
+              await safeScreenshot(page, `./screenshots/pubby_most_snaps_filter_clicked_${Date.now()}.png`);
 
               // Stage 6: Wait for the books container to be visible.
               console.log("Waiting for the books container to appear...");
@@ -150,13 +163,14 @@ jobs:
                 await safeScreenshot(page, `./screenshots/pubby_scroll_${i+1}_${Date.now()}.png`);
               }
 
-              // Stage 8: Extract Recommended Books.
-              // Only select the free book card by filtering for the current page.
-              console.log("Extracting Recommended Books...");
+              // Stage 8: Extract Recommended Books (Kindle Unlimited, Most Snaps).
+              console.log("Extracting Recommended Books (Kindle Unlimited, Most Snaps)...");
               const recommendedBooks = await page.evaluate(() => {
                 const books = [];
-                document.querySelectorAll('.pages-container .page-label.current-page').forEach(label => {
-                  const titleElement = label.querySelector('.page-label-text span') || label.querySelector('.page-label-text');
+                // Adjusted selector to look for 'card' elements that might contain relevant book titles
+                // You may need to refine this selector based on how Kindle Unlimited/Most Snaps books are displayed
+                document.querySelectorAll('.library-books-container .card').forEach(card => {
+                  const titleElement = card.querySelector('.title, .book-title'); // Look for common title selectors
                   if (titleElement && titleElement.innerText.trim().length > 0) {
                     books.push(titleElement.innerText.trim());
                   }
@@ -183,30 +197,34 @@ jobs:
               console.log("Activity Timeline:", activityTimeline);
               await safeScreenshot(page, `./screenshots/pubby_activity_extracted_${Date.now()}.png`);
 
-              // Stage 10: Find a free book card, click it, then click "Pick Book".
-              console.log("Scanning for free book cards...");
-              const freeCardHandle = await page.evaluateHandle((xpath) => {
+              // Stage 10: Find a Kindle Unlimited book card, click it, then click "Pick Book".
+              console.log("Scanning for Kindle Unlimited book cards...");
+              // Updated XPath to find a card that contains 'Kindle Unlimited' text or an image path indicating KU
+              const kuCardHandle = await page.evaluateHandle((xpath) => {
                 const results = [];
                 const query = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
                 for (let i = 0; i < query.snapshotLength; i++) {
                   results.push(query.snapshotItem(i));
                 }
                 return results;
-              }, "//div[contains(@class, 'card') and .//div[contains(@class, 'free')] and contains(., 'Free Download')]");
-              const freeCardProps = await freeCardHandle.getProperties();
-              const freeCardElements = [];
-              for (const property of freeCardProps.values()) {
+              }, "//div[contains(@class, 'card') and (.//div[contains(@class, 'label') and text()='Kindle Unlimited'] or .//img[contains(@src, 'kindle-unlimited.png')])]");
+
+              const kuCardProps = await kuCardHandle.getProperties();
+              const kuCardElements = [];
+              for (const property of kuCardProps.values()) {
                 const element = property.asElement();
                 if (element)
-                  freeCardElements.push(element);
+                  kuCardElements.push(element);
               }
-              if (freeCardElements.length > 0) {
-                console.log("Free book card found. Clicking the card...");
-                await freeCardElements[0].click();
+
+              if (kuCardElements.length > 0) {
+                console.log("Kindle Unlimited book card found. Clicking the card...");
+                await kuCardElements[0].click(); // Click the first found Kindle Unlimited card
                 await sleep(2000);
-                await safeScreenshot(page, `./screenshots/pubby_free_card_clicked_${Date.now()}.png`);
+                await safeScreenshot(page, `./screenshots/pubby_ku_card_clicked_${Date.now()}.png`);
 
                 console.log("Looking for 'Pick Book' button...");
+                // XPath for 'Pick Book' remains the same as it's a general action
                 const pickBookHandle = await page.evaluateHandle((xpath) => {
                   const results = [];
                   const query = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
@@ -228,10 +246,10 @@ jobs:
                   await sleep(2000);
                   await safeScreenshot(page, `./screenshots/pubby_pick_book_clicked_${Date.now()}.png`);
                 } else {
-                  console.log("'Pick Book' button not found after clicking the free book card.");
+                  console.log("'Pick Book' button not found after clicking the Kindle Unlimited book card.");
                 }
               } else {
-                console.log("No free book card found.");
+                console.log("No Kindle Unlimited book card found.");
               }
             } catch (error) {
               console.error("Script error:", error.message);
