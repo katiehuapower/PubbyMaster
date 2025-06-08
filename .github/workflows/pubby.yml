@@ -52,9 +52,17 @@ jobs:
               console.log("Launching browser...");
               browser = await puppeteer.launch({
                 headless: 'new',
-                args: ['--no-sandbox','--disable-setuid-sandbox']
+                defaultViewport: null,
+                args: [
+                  '--no-sandbox',
+                  '--disable-setuid-sandbox',
+                  '--start-maximized'
+                ]
               });
+
               page = await browser.newPage();
+              // maximize in case start-maximized alone isn't enough
+              await page.setViewport({ width: 1920, height: 1080 });
 
               // Stage 1: Navigate to login page
               console.log("Navigating to login page:", loginUrl);
