@@ -185,7 +185,6 @@ jobs:
               console.log("Waiting for current page label…");
               await page.waitForSelector('.section-container .pages-container .page-label.current-page', { visible: true, timeout: 60000 });
               await safeScreenshot(page, `screenshots/pubby_reader_loaded_${Date.now()}.png`);
-
               console.log("Clicking current page in Reader…");
               const clickedReader = await page.evaluate(() => {
                 const curr = document.querySelector('.section-container .pages-container .page-label.current-page');
@@ -198,19 +197,26 @@ jobs:
                 console.error("ERROR: Could not click current page in Reader");
               }
 
-              // Stage 12: Click 'View On Amazon' and capture Amazon page
-              console.log("Clicking 'View On Amazon'…");
-              await Promise.all([
-                page.click('.action.copy-amazon-link'),
-                page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 })
-              ]);
-              await safeScreenshot(page, `screenshots/pubby_view_amazon_${Date.now()}.png`);
+              // Stage 12: Retrieve Amazon URL, navigate and screenshot
+              console.log("Retrieving Amazon link from button…");
+              const amazonUrl = await page.evaluate(() => {
+                const btn = document.querySelector('.action.copy-amazon-link');
+                return btn?.getAttribute('data-clipboard-text')
+                  || btn?.getAttribute('data-amazon-url')
+                  || btn?.dataset?.url
+                  || null;
+              });
+              if (!amazonUrl) {
+                throw new Error("Amazon URL not found on 'View On Amazon' button");
+              }
+              console.log("Navigating to Amazon page:", amazonUrl);
+              await page.goto(amazonUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+              await safeScreenshot(page, `screenshots/pubby_amazon_page_${Date.now()}.png`);
 
-              // Stage 13: Console-log and snapshot Amazon page content
+              // Stage 13: Log Amazon page HTML to console
               console.log("Amazon page HTML content:");
               const amazonHtml = await page.content();
               console.log(amazonHtml);
-              await safeScreenshot(page, `screenshots/pubby_amazon_full_${Date.now()}.png`);
 
             } catch (err) {
               console.error("Script error:", err.message);
