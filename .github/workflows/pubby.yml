@@ -52,7 +52,7 @@ jobs:
               browser = await puppeteer.launch({
                 headless: 'new',
                 defaultViewport: null,
-                args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized']
+                args: ['--no-sandbox','--disable-setuid-sandbox','--start-maximized']
               });
               page = await browser.newPage();
               await page.setViewport({ width: 1920, height: 1080 });
@@ -87,7 +87,7 @@ jobs:
               await sleep(10000);
               await safeScreenshot(page, `screenshots/pubby_browse_${Date.now()}.png`);
 
-              // Stage 4: Click Kindle Unlimited
+              // Stage 4: Click Kindle Unlimited filter
               console.log("Clicking 'Kindle Unlimited' filter…");
               await page.evaluate(() => {
                 const tag = Array.from(document.querySelectorAll('.browsing-tag'))
@@ -97,7 +97,7 @@ jobs:
               await sleep(5000);
               await safeScreenshot(page, `screenshots/pubby_kindle_unlimited_${Date.now()}.png`);
 
-              // Stage 5: Click Most Snaps
+              // Stage 5: Click Most Snaps filter
               console.log("Clicking 'Most Snaps' filter…");
               await page.evaluate(() => {
                 const tag = Array.from(document.querySelectorAll('.browsing-tag'))
@@ -175,7 +175,7 @@ jobs:
               await sleep(2000);
               await safeScreenshot(page, `screenshots/pubby_pick_book_clicked_${Date.now()}.png`);
 
-              // Stage 11: Activate Reader and click current page
+              // Stage 11: Activate Reader and click selected page
               console.log("Clicking 'Reader' tab…");
               await page.evaluate(() => {
                 const tab = Array.from(document.querySelectorAll('.section-container .section-label'))
@@ -187,26 +187,20 @@ jobs:
               await safeScreenshot(page, `screenshots/pubby_reader_loaded_${Date.now()}.png`);
 
               console.log("Clicking current page in Reader…");
-              const clickedReader = await page.evaluate(() => {
-                const curr = document.querySelector('.section-container .pages-container .page-label.current-page');
-                if (curr) { curr.click(); return true; }
-                return false;
-              });
-              if (!clickedReader) {
-                console.error("ERROR: Could not click current page in Reader");
-              } else {
-                await safeScreenshot(page, `screenshots/pubby_reader_clicked_${Date.now()}.png`);
-              }
-
-              // Stage 12: Click 'View On Amazon'
-              console.log("Waiting for 'View On Amazon' button…");
-              await page.waitForSelector('.action.copy-amazon-link', { visible: true, timeout: 60000 });
-              await safeScreenshot(page, `screenshots/pubby_before_amazon_${Date.now()}.png`);
-
-              console.log("Clicking 'View On Amazon'…");
-              await page.click('.action.copy-amazon-link');
+              await page.click('.section-container .pages-container .page-label.current-page');
               await sleep(2000);
-              await safeScreenshot(page, `screenshots/pubby_view_amazon_${Date.now()}.png`);
+              await safeScreenshot(page, `screenshots/pubby_reader_clicked_${Date.now()}.png`);
+
+              // Stage 12: Click 'View On Amazon' and capture new tab
+              console.log("Clicking 'View On Amazon'…");
+              const [target] = await Promise.all([
+                new Promise(resolve => browser.once('targetcreated', resolve)),
+                page.click('.action.copy-amazon-link')
+              ]);
+              const amazonPage = await target.page();
+              await amazonPage.bringToFront();
+              await amazonPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
+              await safeScreenshot(amazonPage, `screenshots/pubby_amazon_page_${Date.now()}.png`);
 
             } catch (err) {
               console.error("Script error:", err.message);
