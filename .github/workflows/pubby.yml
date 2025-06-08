@@ -100,41 +100,66 @@ jobs:
               await sleep(10000);
               await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
 
-              // Stage 5.5: Click the "Kindle Unlimited" filter button using waitForXPath.
+              // Ensure filter tags are loaded before attempting to click.
+              console.log("Waiting for filter tags to appear...");
+              await page.waitForSelector('.Browse-tag', { visible: true, timeout: 15000 });
+
+              // Stage 5.5: Click the "Kindle Unlimited" filter button.
               console.log("Attempting to locate and click the 'Kindle Unlimited' filter button...");
               try {
-                const kindleUnlimitedXPath = "//div[contains(@class, 'Browse-tag') and .//div[contains(@class, 'v-chip__content') and normalize-space(text())='Kindle Unlimited']]";
-                const kindleUnlimitedButton = await page.waitForXPath(kindleUnlimitedXPath, { visible: true, timeout: 15000 });
-                if (kindleUnlimitedButton) {
-                  await kindleUnlimitedButton.click();
+                const kindleUnlimitedFilter = await page.evaluateHandle(() => {
+                  const tags = Array.from(document.querySelectorAll('.Browse-tag'));
+                  for (const tag of tags) {
+                    const content = tag.querySelector('.v-chip__content');
+                    if (content && content.innerText.trim() === 'Kindle Unlimited') {
+                      return tag;
+                    }
+                  }
+                  return null;
+                });
+
+                if (kindleUnlimitedFilter && (await kindleUnlimitedFilter.asElement())) {
+                  await kindleUnlimitedFilter.asElement().click();
                   console.log("'Kindle Unlimited' filter button clicked successfully. Waiting for page update...");
                   await sleep(5000); // Wait for results to load after filter click
                   await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_filter_clicked_${Date.now()}.png`);
                 } else {
-                  console.error("ERROR: 'Kindle Unlimited' filter button not found (XPath method).");
+                  console.error("ERROR: 'Kindle Unlimited' filter button was not found on the page.");
+                  await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_filter_error_${Date.now()}.png`);
                 }
               } catch (error) {
                 console.error(`Error clicking 'Kindle Unlimited' filter: ${error.message}`);
                 await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_filter_error_${Date.now()}.png`);
               }
 
-              // Stage 5.6: Click the "Most Snaps" filter button using waitForXPath.
+              // Stage 5.6: Click the "Most Snaps" filter button.
               console.log("Attempting to locate and click the 'Most Snaps' filter button...");
               try {
-                const mostSnapsXPath = "//div[contains(@class, 'Browse-tag') and .//div[contains(@class, 'v-chip__content') and normalize-space(text())='Most Snaps']]";
-                const mostSnapsButton = await page.waitForXPath(mostSnapsXPath, { visible: true, timeout: 15000 });
-                if (mostSnapsButton) {
-                  await mostSnapsButton.click();
+                const mostSnapsFilter = await page.evaluateHandle(() => {
+                  const tags = Array.from(document.querySelectorAll('.Browse-tag'));
+                  for (const tag of tags) {
+                    const content = tag.querySelector('.v-chip__content');
+                    if (content && content.innerText.trim() === 'Most Snaps') {
+                      return tag;
+                    }
+                  }
+                  return null;
+                });
+
+                if (mostSnapsFilter && (await mostSnapsFilter.asElement())) {
+                  await mostSnapsFilter.asElement().click();
                   console.log("'Most Snaps' filter button clicked successfully. Waiting for page update...");
                   await sleep(10000); // Wait for results to load after filter click
                   await safeScreenshot(page, `./screenshots/pubby_most_snaps_filter_clicked_${Date.now()}.png`);
                 } else {
-                  console.error("ERROR: 'Most Snaps' filter button not found (XPath method).");
+                  console.error("ERROR: 'Most Snaps' filter button was not found on the page.");
+                  await safeScreenshot(page, `./screenshots/pubby_most_snaps_filter_error_${Date.now()}.png`);
                 }
               } catch (error) {
                 console.error(`Error clicking 'Most Snaps' filter: ${error.message}`);
                 await safeScreenshot(page, `./screenshots/pubby_most_snaps_filter_error_${Date.now()}.png`);
               }
+
 
               // Stage 6: Wait for the books container to be visible.
               console.log("Waiting for the books container to appear...");
@@ -193,12 +218,14 @@ jobs:
               // Stage 10: Find a Kindle Unlimited book card, click it, then click "Pick Book".
               console.log("Scanning for Kindle Unlimited book cards to pick...");
               // Wait for at least one card to be visible before attempting to find KU cards
-              await page.waitForSelector('.card', { visible: true, timeout: 30000 });
+              // Increased timeout to allow more cards to load after filtering
+              await page.waitForSelector('.card', { visible: true, timeout: 45000 });
 
               const kuCardToClick = await page.evaluateHandle(() => {
                 const cards = Array.from(document.querySelectorAll('.card'));
                 for (const card of cards) {
                   const kuBadge = card.querySelector('.badge-item.label');
+                  // console.log(`Card found. Checking badge: ${kuBadge ? kuBadge.innerText : 'No badge'}`); // Debugging line
                   if (kuBadge && kuBadge.innerText.includes('Kindle Unlimited')) {
                     return card; // Return the card element itself
                   }
