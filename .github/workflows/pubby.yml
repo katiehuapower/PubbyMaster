@@ -40,9 +40,9 @@ jobs:
           async function safeScreenshot(page, path) {
             try {
               await page.screenshot({ path });
-              console.log(`Screenshot taken: ${path}`);
+              console.log(\`Screenshot taken: \${path}\`);
             } catch (e) {
-              console.error(`Screenshot error: ${e.message}`);
+              console.error(\`Screenshot error: \${e.message}\`);
             }
           }
 
@@ -59,33 +59,33 @@ jobs:
               // Stage 1: Login
               console.log("Navigating to login page:", loginUrl);
               await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-              await safeScreenshot(page, `screenshots/pubby_home_${Date.now()}.png`);
+              await safeScreenshot(page, \`screenshots/pubby_home_\${Date.now()}.png\`);
 
               console.log("Filling in login credentials...");
               await page.type('input[name="email"]', username, { delay: 100 });
               await page.type('input[name="password"]', password, { delay: 100 });
-              await safeScreenshot(page, `screenshots/pubby_credentials_filled_${Date.now()}.png`);
+              await safeScreenshot(page, \`screenshots/pubby_credentials_filled_\${Date.now()}.png\`);
 
               console.log("Submitting login form...");
               await Promise.all([
                 page.click('button[type="submit"]'),
                 page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 })
               ]);
-              await safeScreenshot(page, `screenshots/pubby_after_login_${Date.now()}.png`);
+              await safeScreenshot(page, \`screenshots/pubby_after_login_\${Date.now()}.png\`);
 
               // Stage 2: Verify login
               console.log("Verifying login status...");
               const dash = await page.$('a.logout, .dashboard');
               if (!dash) {
                 console.warn("Login may have failed.");
-                await safeScreenshot(page, `screenshots/pubby_login_failed_${Date.now()}.png`);
+                await safeScreenshot(page, \`screenshots/pubby_login_failed_\${Date.now()}.png\`);
               }
 
               // Stage 3: Browse page
               console.log("Navigating to browse page:", browseUrl);
               await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
               await sleep(10000);
-              await safeScreenshot(page, `screenshots/pubby_browse_${Date.now()}.png`);
+              await safeScreenshot(page, \`screenshots/pubby_browse_\${Date.now()}.png\`);
 
               // Stage 4: Click Kindle Unlimited
               console.log("Clicking 'Kindle Unlimited' filter…");
@@ -97,7 +97,7 @@ jobs:
               });
               if (!kuClicked) console.error("ERROR: Kindle Unlimited filter not found");
               await sleep(5000);
-              await safeScreenshot(page, `screenshots/pubby_kindle_unlimited_${Date.now()}.png`);
+              await safeScreenshot(page, \`screenshots/pubby_kindle_unlimited_\${Date.now()}.png\`);
 
               // Stage 5: Click Most Snaps
               console.log("Clicking 'Most Snaps' filter…");
@@ -109,20 +109,20 @@ jobs:
               });
               if (!snapsClicked) console.error("ERROR: Most Snaps filter not found");
               await sleep(5000);
-              await safeScreenshot(page, `screenshots/pubby_most_snaps_${Date.now()}.png`);
+              await safeScreenshot(page, \`screenshots/pubby_most_snaps_\${Date.now()}.png\`);
 
               // Stage 6: Wait for book list
               console.log("Waiting for books container…");
               await page.waitForSelector('.library-books-container', { visible: true, timeout: 60000 });
-              await safeScreenshot(page, `screenshots/pubby_browse_loaded_${Date.now()}.png`);
+              await safeScreenshot(page, \`screenshots/pubby_browse_loaded_\${Date.now()}.png\`);
               await sleep(5000);
 
               // Stage 7: Scroll to load more
               for (let i = 0; i < 3; i++) {
-                console.log(`Scrolling iteration ${i+1}`);
+                console.log(\`Scrolling iteration \${i+1}\`);
                 await page.evaluate(() => window.scrollBy(0, window.innerHeight));
                 await sleep(3000);
-                await safeScreenshot(page, `screenshots/pubby_scroll_${i+1}_${Date.now()}.png`);
+                await safeScreenshot(page, \`screenshots/pubby_scroll_\${i+1}_\${Date.now()}.png\`);
               }
 
               // Stage 8: Extract recommended titles
@@ -132,7 +132,7 @@ jobs:
                   .map(el => el.innerText.trim())
               );
               console.log("Recommended Books:", recommended);
-              await safeScreenshot(page, `screenshots/pubby_books_extracted_${Date.now()}.png`);
+              await safeScreenshot(page, \`screenshots/pubby_books_extracted_\${Date.now()}.png\`);
 
               // Stage 9: Extract timeline
               console.log("Extracting Activity Timeline…");
@@ -144,7 +144,7 @@ jobs:
                   }))
               );
               console.log("Activity Timeline:", timeline);
-              await safeScreenshot(page, `screenshots/pubby_activity_extracted_${Date.now()}.png`);
+              await safeScreenshot(page, \`screenshots/pubby_activity_extracted_\${Date.now()}.png\`);
 
               // Stage 10: Pick a Kindle Unlimited book
               console.log("Scanning for Kindle Unlimited cards…");
@@ -168,7 +168,7 @@ jobs:
                 console.log("Clicking first KU card…");
                 await kuEls[0].click();
                 await sleep(2000);
-                await safeScreenshot(page, `screenshots/pubby_ku_card_clicked_${Date.now()}.png`);
+                await safeScreenshot(page, \`screenshots/pubby_ku_card_clicked_\${Date.now()}.png\`);
 
                 console.log("Looking for 'Pick Book'…");
                 const pickHandle = await page.evaluateHandle(xpath => {
@@ -191,7 +191,7 @@ jobs:
                   console.log("Clicking 'Pick Book'…");
                   await pickEls[0].click();
                   await sleep(2000);
-                  await safeScreenshot(page, `screenshots/pubby_pick_book_clicked_${Date.now()}.png`);
+                  await safeScreenshot(page, \`screenshots/pubby_pick_book_clicked_\${Date.now()}.png\`);
                 } else {
                   console.warn("No 'Pick Book' found.");
                 }
@@ -199,21 +199,21 @@ jobs:
                 console.warn("No KU card found.");
               }
 
-              // Stage 11: Wait for reader view and click the book
-              console.log("Waiting for reader view to load…");
-              await page.waitForSelector('.reader-container, .reader', { visible: true, timeout: 60000 });
-              await safeScreenshot(page, `screenshots/pubby_reader_loaded_${Date.now()}.png`);
+              // Stage 11: Wait for Reader section and click the current page
+              console.log("Waiting for Reader section to load…");
+              await page.waitForSelector('.section-container .pages-container', { visible: true, timeout: 60000 });
+              await safeScreenshot(page, \`screenshots/pubby_reader_loaded_\${Date.now()}.png\`);
 
-              console.log("Clicking the book in the reader…");
-              const clickedReaderBook = await page.evaluate(() => {
-                const book = document.querySelector('.reader .book, .reader-container .book');
-                if (book) { book.click(); return true; }
+              console.log("Clicking the current page label in Reader…");
+              const clickedReader = await page.evaluate(() => {
+                const curr = document.querySelector('.section-container .pages-container .page-label.current-page');
+                if (curr) { curr.click(); return true; }
                 return false;
               });
-              if (!clickedReaderBook) {
-                console.error("ERROR: Could not click the book in the reader");
+              if (!clickedReader) {
+                console.error("ERROR: Could not click current page in Reader");
               } else {
-                await safeScreenshot(page, `screenshots/pubby_reader_book_clicked_${Date.now()}.png`);
+                await safeScreenshot(page, \`screenshots/pubby_reader_book_clicked_\${Date.now()}.png\`);
               }
 
               // Stage 12: Click 'View On Amazon'
@@ -226,7 +226,7 @@ jobs:
               if (!clickedViewAmazon) {
                 console.error("ERROR: Could not click 'View On Amazon'");
               } else {
-                await safeScreenshot(page, `screenshots/pubby_view_amazon_${Date.now()}.png`);
+                await safeScreenshot(page, \`screenshots/pubby_view_amazon_\${Date.now()}.png\`);
               }
 
             } catch (err) {
@@ -235,8 +235,10 @@ jobs:
               if (page) {
                 try {
                   console.log("Saving final HTML…");
-                  const html = await page.content();
-                  fs.writeFileSync(`screenshots/pubby_final_page_${Date.now()}.html`, html);
+                  fs.writeFileSync(
+                    \`screenshots/pubby_final_page_\${Date.now()}.html\`,
+                    await page.content()
+                  );
                 } catch (e) {
                   console.error("Failed saving HTML:", e.message);
                 }
