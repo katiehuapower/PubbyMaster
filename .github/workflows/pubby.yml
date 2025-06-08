@@ -60,10 +60,12 @@ jobs:
                 ]
               });
               page = await browser.newPage();
+              // Set a default timeout for all page actions
+              page.setDefaultTimeout(60000);
 
               // Stage 1: Navigate to the login page.
               console.log("Navigating to login page:", loginUrl);
-              await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+              await page.goto(loginUrl, { waitUntil: 'networkidle2' });
               await safeScreenshot(page, `./screenshots/pubby_home_${Date.now()}.png`);
 
               // Stage 2: Fill in the login form.
@@ -75,78 +77,68 @@ jobs:
               // Stage 3: Submit the login form.
               console.log("Clicking the login button...");
               await Promise.all([
-                page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
+                page.waitForNavigation({ waitUntil: 'networkidle2' }),
                 page.click('button[type="submit"]')
               ]);
               await safeScreenshot(page, `./screenshots/pubby_after_login_${Date.now()}.png`);
 
               // Stage 4: Verify login status using a more robust selector.
               console.log("Verifying login status...");
-              // Check for elements that appear after successful login, e.g., the user account icon in the top bar.
-              const loggedInIndicator = await page.waitForSelector('.top-user .account-icon, .top-bar .top-logo', { visible: true, timeout: 15000 });
-              if (loggedInIndicator) {
+              try {
+                await page.waitForSelector('.top-user .account-icon, .top-bar .top-logo', { visible: true, timeout: 15000 });
                 console.log("Login successful. Logged-in indicator found.");
-              } else {
-                console.error("Login failed. Logged-in indicator not found.");
+              } catch (error) {
+                console.error("Login failed. Logged-in indicator not found:", error.message);
                 await safeScreenshot(page, `./screenshots/pubby_login_failed_${Date.now()}.png`);
-                // Consider throwing an error or exiting if login is critical
                 throw new Error("Login verification failed.");
               }
 
               // Stage 5: Navigate to the browse page.
               console.log("Navigating to browse page:", browseUrl);
-              await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
-              // Wait for 10 seconds before making pubby browse screenshot.
+              await page.goto(browseUrl, { waitUntil: 'networkidle2' });
+              // Wait for 10 seconds before making pubby browse screenshot to ensure all elements load.
               await sleep(10000);
               await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
 
-              // Stage 5.5: Click the "Kindle Unlimited" filter button.
-              console.log("Attempting to locate the 'Kindle Unlimited' filter button...");
-              const kindleUnlimitedFilter = await page.evaluateHandle(() => {
-                const tags = Array.from(document.querySelectorAll('.Browse-tag .v-chip__content'));
-                const kindleUnlimitedTag = tags.find(tag => tag.innerText.trim() === "Kindle Unlimited");
-                if (kindleUnlimitedTag) {
-                  return kindleUnlimitedTag.closest('.Browse-tag'); // Get the clickable parent
+              // Stage 5.5: Click the "Kindle Unlimited" filter button using waitForXPath.
+              console.log("Attempting to locate and click the 'Kindle Unlimited' filter button...");
+              try {
+                const kindleUnlimitedXPath = "//div[contains(@class, 'Browse-tag') and .//div[contains(@class, 'v-chip__content') and normalize-space(text())='Kindle Unlimited']]";
+                const kindleUnlimitedButton = await page.waitForXPath(kindleUnlimitedXPath, { visible: true, timeout: 15000 });
+                if (kindleUnlimitedButton) {
+                  await kindleUnlimitedButton.click();
+                  console.log("'Kindle Unlimited' filter button clicked successfully. Waiting for page update...");
+                  await sleep(5000); // Wait for results to load after filter click
+                  await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_filter_clicked_${Date.now()}.png`);
+                } else {
+                  console.error("ERROR: 'Kindle Unlimited' filter button not found (XPath method).");
                 }
-                return null;
-              });
-
-              if (kindleUnlimitedFilter && (await kindleUnlimitedFilter.asElement())) {
-                console.log("'Kindle Unlimited' filter button found. Clicking it...");
-                await kindleUnlimitedFilter.asElement().click();
-                console.log("'Kindle Unlimited' filter button clicked successfully. Waiting for page update...");
-              } else {
-                console.error("ERROR: 'Kindle Unlimited' filter button was not found on the page.");
+              } catch (error) {
+                console.error(`Error clicking 'Kindle Unlimited' filter: ${error.message}`);
+                await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_filter_error_${Date.now()}.png`);
               }
-              // Wait for 5 seconds after clicking filter.
-              await sleep(5000);
-              await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_filter_clicked_${Date.now()}.png`);
 
-              // Stage 5.6: Click the "Most Snaps" filter button.
-              console.log("Attempting to locate the 'Most Snaps' filter button...");
-              const mostSnapsFilter = await page.evaluateHandle(() => {
-                const tags = Array.from(document.querySelectorAll('.Browse-tag .v-chip__content'));
-                const mostSnapsTag = tags.find(tag => tag.innerText.trim() === "Most Snaps");
-                if (mostSnapsTag) {
-                  return mostSnapsTag.closest('.Browse-tag'); // Get the clickable parent
+              // Stage 5.6: Click the "Most Snaps" filter button using waitForXPath.
+              console.log("Attempting to locate and click the 'Most Snaps' filter button...");
+              try {
+                const mostSnapsXPath = "//div[contains(@class, 'Browse-tag') and .//div[contains(@class, 'v-chip__content') and normalize-space(text())='Most Snaps']]";
+                const mostSnapsButton = await page.waitForXPath(mostSnapsXPath, { visible: true, timeout: 15000 });
+                if (mostSnapsButton) {
+                  await mostSnapsButton.click();
+                  console.log("'Most Snaps' filter button clicked successfully. Waiting for page update...");
+                  await sleep(10000); // Wait for results to load after filter click
+                  await safeScreenshot(page, `./screenshots/pubby_most_snaps_filter_clicked_${Date.now()}.png`);
+                } else {
+                  console.error("ERROR: 'Most Snaps' filter button not found (XPath method).");
                 }
-                return null;
-              });
-
-              if (mostSnapsFilter && (await mostSnapsFilter.asElement())) {
-                console.log("'Most Snaps' filter button found. Clicking it...");
-                await mostSnapsFilter.asElement().click();
-                console.log("'Most Snaps' filter button clicked successfully. Waiting for page update...");
-              } else {
-                console.error("ERROR: 'Most Snaps' filter button was not found on the page.");
+              } catch (error) {
+                console.error(`Error clicking 'Most Snaps' filter: ${error.message}`);
+                await safeScreenshot(page, `./screenshots/pubby_most_snaps_filter_error_${Date.now()}.png`);
               }
-              // Wait for 10 seconds after clicking Most Snaps filter.
-              await sleep(10000);
-              await safeScreenshot(page, `./screenshots/pubby_most_snaps_filter_clicked_${Date.now()}.png`);
 
               // Stage 6: Wait for the books container to be visible.
               console.log("Waiting for the books container to appear...");
-              await page.waitForSelector('.library-books-container', { visible: true, timeout: 60000 });
+              await page.waitForSelector('.library-books-container', { visible: true });
               console.log("Books container loaded.");
               await safeScreenshot(page, `./screenshots/pubby_browse_loaded_${Date.now()}.png`);
 
@@ -171,6 +163,7 @@ jobs:
                 document.querySelectorAll('.library-books-container .card').forEach(card => {
                   const titleElement = card.querySelector('.title, .book-title');
                   const kindleUnlimitedBadge = card.querySelector('.badge-item.label'); // Looking for the badge specifically
+                  // Ensure both title and KU badge are present
                   if (titleElement && titleElement.innerText.trim().length > 0 && kindleUnlimitedBadge && kindleUnlimitedBadge.innerText.includes("Kindle Unlimited")) {
                     books.push(titleElement.innerText.trim());
                   }
@@ -199,7 +192,9 @@ jobs:
 
               // Stage 10: Find a Kindle Unlimited book card, click it, then click "Pick Book".
               console.log("Scanning for Kindle Unlimited book cards to pick...");
-              // More robust selector for Kindle Unlimited book cards
+              // Wait for at least one card to be visible before attempting to find KU cards
+              await page.waitForSelector('.card', { visible: true, timeout: 30000 });
+
               const kuCardToClick = await page.evaluateHandle(() => {
                 const cards = Array.from(document.querySelectorAll('.card'));
                 for (const card of cards) {
