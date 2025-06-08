@@ -1,4 +1,4 @@
-name: Pubby.co Login, Browse & Pick Kindle Unlimited Book Automation (Most Snaps)
+name: Pubby.co Login, Browse & Pick Free Book Automation
 
 on:
   schedule:
@@ -23,7 +23,7 @@ jobs:
           npm init -y
           npm install puppeteer puppeteer-core puppeteer-extra puppeteer-extra-plugin-stealth fs
 
-      - name: Create Puppeteer script for Login, Browse & Pick Kindle Unlimited Book (Most Snaps)
+      - name: Create Puppeteer script for Login, Browse & Pick Free Book
         run: |
           mkdir -p scripts screenshots
           cat > scripts/pubby-login-and-browse.js << 'EOL'
@@ -60,12 +60,10 @@ jobs:
                 ]
               });
               page = await browser.newPage();
-              // Set a default timeout for all page actions
-              page.setDefaultTimeout(60000);
 
               // Stage 1: Navigate to the login page.
               console.log("Navigating to login page:", loginUrl);
-              await page.goto(loginUrl, { waitUntil: 'networkidle2' });
+              await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
               await safeScreenshot(page, `./screenshots/pubby_home_${Date.now()}.png`);
 
               // Stage 2: Fill in the login form.
@@ -77,93 +75,71 @@ jobs:
               // Stage 3: Submit the login form.
               console.log("Clicking the login button...");
               await Promise.all([
-                page.waitForNavigation({ waitUntil: 'networkidle2' }),
+                page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }),
                 page.click('button[type="submit"]')
               ]);
               await safeScreenshot(page, `./screenshots/pubby_after_login_${Date.now()}.png`);
 
-              // Stage 4: Verify login status using a more robust selector.
+              // Stage 4: Verify login status.
               console.log("Verifying login status...");
-              try {
-                await page.waitForSelector('.top-user .account-icon, .top-bar .top-logo', { visible: true, timeout: 15000 });
-                console.log("Login successful. Logged-in indicator found.");
-              } catch (error) {
-                console.error("Login failed. Logged-in indicator not found:", error.message);
+              const dashboard = await page.$('a.logout, .dashboard');
+              if (dashboard) {
+                console.log("Login successful.");
+              } else {
+                console.warn("Login may have failed. Dashboard element not found.");
                 await safeScreenshot(page, `./screenshots/pubby_login_failed_${Date.now()}.png`);
-                throw new Error("Login verification failed.");
               }
 
               // Stage 5: Navigate to the browse page.
               console.log("Navigating to browse page:", browseUrl);
-              await page.goto(browseUrl, { waitUntil: 'networkidle2' });
-              // Wait for 15 seconds before making pubby browse screenshot to ensure all elements load. (Increased from 10s)
-              await sleep(15000);
+              await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+              await sleep(10000);
               await safeScreenshot(page, `./screenshots/pubby_browse_${Date.now()}.png`);
 
-              // Ensure filter tags are loaded before attempting to click.
-              console.log("Waiting for filter tags to appear...");
-              await page.waitForSelector('.Browse-tag', { visible: true, timeout: 30000 }); 
-
-              // Stage 5.5: Click the "Kindle Unlimited" filter button.
-              console.log("Attempting to locate and click the 'Kindle Unlimited' filter button...");
-              try {
-                const kindleUnlimitedFilter = await page.evaluateHandle(() => {
-                  const tags = Array.from(document.querySelectorAll('.Browse-tag'));
-                  for (const tag of tags) {
-                    const content = tag.querySelector('.v-chip__content');
-                    if (content && content.innerText.trim() === 'Kindle Unlimited') {
-                      return tag;
-                    }
-                  }
-                  return null;
-                });
-
-                if (kindleUnlimitedFilter && (await kindleUnlimitedFilter.asElement())) {
-                  await kindleUnlimitedFilter.asElement().click();
-                  console.log("'Kindle Unlimited' filter button clicked successfully. Waiting for page update...");
-                  await sleep(5000); // Wait for results to load after filter click
-                  await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_filter_clicked_${Date.now()}.png`);
-                } else {
-                  console.error("ERROR: 'Kindle Unlimited' filter button was not found on the page.");
-                  await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_filter_error_${Date.now()}.png`);
+              // ─── Stage 5.5: Click the “Kindle Unlimited” filter, then “Most Snaps” ───────────────────
+              console.log("Locating the 'Kindle Unlimited' filter…");
+              const kuClicked = await page.evaluate(() => {
+                const tags = Array.from(document.querySelectorAll('.browsing-tag'));
+                const kuTag = tags.find(tag =>
+                  tag.querySelector('.label')?.innerText.trim() === 'Kindle Unlimited'
+                );
+                if (kuTag) {
+                  console.log("Found Kindle Unlimited — clicking it");
+                  kuTag.click();
+                  return true;
                 }
-              } catch (error) {
-                console.error(`Error clicking 'Kindle Unlimited' filter: ${error.message}`);
-                await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_filter_error_${Date.now()}.png`);
+                console.warn("Kindle Unlimited filter not found");
+                return false;
+              });
+              if (!kuClicked) {
+                console.error("ERROR: Could not click 'Kindle Unlimited' filter");
               }
+              await sleep(5000);
+              await safeScreenshot(page, `./screenshots/pubby_kindle_unlimited_${Date.now()}.png`);
 
-              // Stage 5.6: Click the "Most Snaps" filter button.
-              console.log("Attempting to locate and click the 'Most Snaps' filter button...");
-              try {
-                const mostSnapsFilter = await page.evaluateHandle(() => {
-                  const tags = Array.from(document.querySelectorAll('.Browse-tag'));
-                  for (const tag of tags) {
-                    const content = tag.querySelector('.v-chip__content');
-                    if (content && content.innerText.trim() === 'Most Snaps') {
-                      return tag;
-                    }
-                  }
-                  return null;
-                });
-
-                if (mostSnapsFilter && (await mostSnapsFilter.asElement())) {
-                  await mostSnapsFilter.asElement().click();
-                  console.log("'Most Snaps' filter button clicked successfully. Waiting for page update...");
-                  await sleep(10000); // Wait for results to load after filter click
-                  await safeScreenshot(page, `./screenshots/pubby_most_snaps_filter_clicked_${Date.now()}.png`);
-                } else {
-                  console.error("ERROR: 'Most Snaps' filter button was not found on the page.");
-                  await safeScreenshot(page, `./screenshots/pubby_most_snaps_filter_error_${Date.now()}.png`);
+              console.log("Locating the 'Most Snaps' filter…");
+              const snapsClicked = await page.evaluate(() => {
+                const tags = Array.from(document.querySelectorAll('.browsing-tag'));
+                const snapsTag = tags.find(tag =>
+                  tag.querySelector('.label.is-underlined')?.innerText.trim() === 'Most Snaps'
+                );
+                if (snapsTag) {
+                  console.log("Found Most Snaps — clicking it");
+                  snapsTag.click();
+                  return true;
                 }
-              } catch (error) {
-                console.error(`Error clicking 'Most Snaps' filter: ${error.message}`);
-                await safeScreenshot(page, `./screenshots/pubby_most_snaps_filter_error_${Date.now()}.png`);
+                console.warn("Most Snaps filter not found");
+                return false;
+              });
+              if (!snapsClicked) {
+                console.error("ERROR: Could not click 'Most Snaps' filter");
               }
-
+              await sleep(5000);
+              await safeScreenshot(page, `./screenshots/pubby_most_snaps_${Date.now()}.png`);
 
               // Stage 6: Wait for the books container to be visible.
               console.log("Waiting for the books container to appear...");
-              await page.waitForSelector('.library-books-container', { visible: true });
+              await page.waitForSelector('.library-books-container', { visible: true, timeout: 60000 });
               console.log("Books container loaded.");
               await safeScreenshot(page, `./screenshots/pubby_browse_loaded_${Date.now()}.png`);
 
@@ -181,24 +157,22 @@ jobs:
                 await safeScreenshot(page, `./screenshots/pubby_scroll_${i+1}_${Date.now()}.png`);
               }
 
-              // Stage 8: Extract Recommended Books (Kindle Unlimited, Most Snaps).
-              console.log("Extracting Recommended Books (Kindle Unlimited, Most Snaps)...");
+              // Stage 8: Extract Recommended Books.
+              console.log("Extracting Recommended Books...");
               const recommendedBooks = await page.evaluate(() => {
                 const books = [];
-                document.querySelectorAll('.library-books-container .card').forEach(card => {
-                  const titleElement = card.querySelector('.title, .book-title');
-                  const kindleUnlimitedBadge = card.querySelector('.badge-item.label'); // Looking for the badge specifically
-                  // Ensure both title and KU badge are present
-                  if (titleElement && titleElement.innerText.trim().length > 0 && kindleUnlimitedBadge && kindleUnlimitedBadge.innerText.includes("Kindle Unlimited")) {
+                document.querySelectorAll('.pages-container .page-label.current-page').forEach(label => {
+                  const titleElement = label.querySelector('.page-label-text span') || label.querySelector('.page-label-text');
+                  if (titleElement && titleElement.innerText.trim().length > 0) {
                     books.push(titleElement.innerText.trim());
                   }
                 });
                 return books;
               });
-              console.log("Final Recommended Books (Kindle Unlimited, Most Snaps filtered):", recommendedBooks);
+              console.log("Final Recommended Books:", recommendedBooks);
               await safeScreenshot(page, `./screenshots/pubby_books_extracted_${Date.now()}.png`);
 
-              // Stage 9: Extract Activity Timeline (using the original selector).
+              // Stage 9: Extract Activity Timeline.
               console.log("Extracting Activity Timeline...");
               const activityTimeline = await page.evaluate(() => {
                 const events = [];
@@ -215,49 +189,58 @@ jobs:
               console.log("Activity Timeline:", activityTimeline);
               await safeScreenshot(page, `./screenshots/pubby_activity_extracted_${Date.now()}.png`);
 
-              // Stage 10: Find a Kindle Unlimited book card, click it, then click "Pick Book".
-              console.log("Scanning for Kindle Unlimited book cards to pick...");
-              // Wait for at least one card to be visible before attempting to find KU cards
-              // Increased timeout to allow more cards to load after filtering
-              await page.waitForSelector('.card', { visible: true, timeout: 45000 });
-
-              const kuCardToClick = await page.evaluateHandle(() => {
-                const cards = Array.from(document.querySelectorAll('.card'));
-                for (const card of cards) {
-                  const kuBadge = card.querySelector('.badge-item.label');
-                  // console.log(`Card found. Checking badge: ${kuBadge ? kuBadge.innerText : 'No badge'}`); // Debugging line
-                  if (kuBadge && kuBadge.innerText.includes('Kindle Unlimited')) {
-                    return card; // Return the card element itself
-                  }
+              // Stage 10: Find a free book card, click it, then click "Pick Book".
+              console.log("Scanning for free book cards...");
+              const freeCardHandle = await page.evaluateHandle((xpath) => {
+                const results = [];
+                const query = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                for (let i = 0; i < query.snapshotLength; i++) {
+                  results.push(query.snapshotItem(i));
                 }
-                return null;
-              });
-
-              if (kuCardToClick && (await kuCardToClick.asElement())) {
-                console.log("Kindle Unlimited book card found. Clicking the card...");
-                await kuCardToClick.asElement().click();
-                await sleep(5000); // Increased wait time after clicking the card
-                await safeScreenshot(page, `./screenshots/pubby_ku_card_clicked_${Date.now()}.png`);
+                return results;
+              }, "//div[contains(@class, 'card') and .//div[contains(@class, 'free')] and contains(., 'Free Download')]");
+              const freeCardProps = await freeCardHandle.getProperties();
+              const freeCardElements = [];
+              for (const property of freeCardProps.values()) {
+                const element = property.asElement();
+                if (element)
+                  freeCardElements.push(element);
+              }
+              if (freeCardElements.length > 0) {
+                console.log("Free book card found. Clicking the card...");
+                await freeCardElements[0].click();
+                await sleep(2000);
+                await safeScreenshot(page, `./screenshots/pubby_free_card_clicked_${Date.now()}.png`);
 
                 console.log("Looking for 'Pick Book' button...");
-                // XPath for 'Pick Book' remains the same as it's a general action
-                const pickBookButton = await page.waitForXPath("//div[contains(@class, 'action') and contains(@class, 'action-blue') and normalize-space(text())='Pick Book']", { visible: true, timeout: 15000 });
-                
-                if (pickBookButton) {
+                const pickBookHandle = await page.evaluateHandle((xpath) => {
+                  const results = [];
+                  const query = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                  for (let i = 0; i < query.snapshotLength; i++) {
+                    results.push(query.snapshotItem(i));
+                  }
+                  return results;
+                }, "//div[contains(@class, 'action') and contains(@class, 'action-blue') and normalize-space(text())='Pick Book']");
+                const pickBookProps = await pickBookHandle.getProperties();
+                const pickBookElements = [];
+                for (const property of pickBookProps.values()) {
+                  const element = property.asElement();
+                  if (element)
+                    pickBookElements.push(element);
+                }
+                if (pickBookElements.length > 0) {
                   console.log("'Pick Book' button found. Clicking...");
-                  await pickBookButton.click();
-                  await sleep(5000); // Increased wait time after clicking pick book
+                  await pickBookElements[0].click();
+                  await sleep(2000);
                   await safeScreenshot(page, `./screenshots/pubby_pick_book_clicked_${Date.now()}.png`);
-                  console.log("Book picked successfully!");
                 } else {
-                  console.log("'Pick Book' button not found after clicking the Kindle Unlimited book card.");
+                  console.log("'Pick Book' button not found after clicking the free book card.");
                 }
               } else {
-                console.log("No Kindle Unlimited book card found to pick.");
+                console.log("No free book card found.");
               }
             } catch (error) {
               console.error("Script error:", error.message);
-              process.exit(1); // Exit with error code on failure
             } finally {
               // Always save the final HTML of the browse page.
               if (page) {
