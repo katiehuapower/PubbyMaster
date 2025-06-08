@@ -102,7 +102,7 @@ jobs:
 
               // Ensure filter tags are loaded before attempting to click.
               console.log("Waiting for filter tags to appear...");
-              await page.waitForSelector('.Browse-tag', { visible: true, timeout: 15000 });
+              await page.waitForSelector('.Browse-tag', { visible: true, timeout: 30000 }); // Increased timeout to 30 seconds
 
               // Stage 5.5: Click the "Kindle Unlimited" filter button.
               console.log("Attempting to locate and click the 'Kindle Unlimited' filter button...");
