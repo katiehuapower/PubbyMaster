@@ -198,15 +198,21 @@ jobs:
                 await safeScreenshot(page, `screenshots/pubby_reader_clicked_${Date.now()}.png`);
               }
 
-              // Stage 12: Click 'View On Amazon'
+              // Stage 12: Click 'View On Amazon' and follow new tab
               console.log("Waiting for 'View On Amazon' button…");
               await page.waitForSelector('.action.copy-amazon-link', { visible: true, timeout: 60000 });
               await safeScreenshot(page, `screenshots/pubby_before_amazon_${Date.now()}.png`);
 
-              console.log("Clicking 'View On Amazon'…");
-              await page.click('.action.copy-amazon-link');
-              await sleep(2000);
-              await safeScreenshot(page, `screenshots/pubby_view_amazon_${Date.now()}.png`);
+              console.log("Clicking 'View On Amazon' and capturing new tab…");
+              // Click the button and wait for the new Amazon tab to open
+              const [newPageTarget] = await Promise.all([
+                browser.waitForTarget(target => target.url().includes('amazon.com'), { timeout: 60000 }),
+                page.click('.action.copy-amazon-link')
+              ]);
+              const newPage = await newPageTarget.page();
+              await newPage.bringToFront();
+              await newPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 });
+              await safeScreenshot(newPage, `screenshots/pubby_amazon_tab_${Date.now()}.png`);
 
             } catch (err) {
               console.error("Script error:", err.message);
