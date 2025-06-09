@@ -23,10 +23,10 @@ jobs:
           npm init -y
           npm install puppeteer puppeteer-core puppeteer-extra puppeteer-extra-plugin-stealth fs
 
-      - name: Create Puppeteer script for Login, Browse & Pick Kindle Unlimited Book & View On Amazon (popup-event debug)
+      - name: Create Puppeteer script for Login, Browse & Pick Kindle Unlimited Book & View On Amazon (extensive debug)
         run: |
           mkdir -p scripts screenshots debug
-          cat > scripts/pubby-login-and-browse.js << 'EOL'
+          cat << 'EOF' > scripts/pubby-login-and-browse.js
           const puppeteer = require('puppeteer-extra');
           const StealthPlugin = require('puppeteer-extra-plugin-stealth');
           const fs = require('fs');
@@ -35,6 +35,7 @@ jobs:
           function sleep(ms) {
             return new Promise(r => setTimeout(r, ms));
           }
+
           async function safeScreenshot(page, path) {
             try {
               await page.screenshot({ path, fullPage: true });
@@ -43,23 +44,25 @@ jobs:
               console.error(`Screenshot error: ${e.message}`);
             }
           }
+
           async function dumpPageInfo(page, label) {
             try {
-              console.log(\`[\${label}] URL: \${page.url()}\`);
+              console.log(`[${label}] URL: ${page.url()}`);
               const html = await page.content();
-              const filename = \`debug/\${label.replace(/\\s+/g,'_')}_\${Date.now()}.html\`;
+              const filename = `debug/${label.replace(/\s+/g,'_')}_${Date.now()}.html`;
               fs.writeFileSync(filename, html);
-              console.log(\`[\${label}] HTML dumped to \${filename}\`);
+              console.log(`[${label}] HTML dumped to ${filename}`);
               const cookies = await page.cookies();
-              console.log(\`[\${label}] Cookies:\`, cookies);
+              console.log(`[${label}] Cookies:`, cookies);
             } catch (e) {
-              console.error(\`Error dumping page info for \${label}: \${e.message}\`);
+              console.error(`Error dumping page info for ${label}: ${e.message}`);
             }
           }
 
           async function loginAndBrowse(loginUrl, browseUrl, username, password) {
             let browser, page;
             try {
+              // Launch browser
               browser = await puppeteer.launch({
                 headless: 'new',
                 defaultViewport: null,
@@ -68,19 +71,177 @@ jobs:
               page = await browser.newPage();
               await page.setViewport({ width: 1920, height: 1080 });
 
-              // … Stages 1–11 identical to before …
-
-              // === STAGE 12: View On Amazon via popup event ===
-              console.log("Stage 12: Waiting for Amazon popup…");
-              const [amazonPage] = await Promise.all([
-                page.waitForEvent('popup', { timeout: 90_000 }),
-                page.click('.action.copy-amazon-link')
+              // Stage 1: Login
+              console.log("Stage 1: Navigating to login page:", loginUrl);
+              await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+              await safeScreenshot(page, `screenshots/pubby_home_${Date.now()}.png`);
+              console.log("Stage 1: Filling in login credentials...");
+              await page.type('input[name="email"]', username, { delay: 100 });
+              await page.type('input[name="password"]', password, { delay: 100 });
+              await safeScreenshot(page, `screenshots/pubby_credentials_filled_${Date.now()}.png`);
+              console.log("Stage 1: Submitting login form...");
+              await Promise.all([
+                page.click('button[type="submit"]'),
+                page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 })
               ]);
-              await dumpPageInfo(amazonPage, "amazon_tab_before_nav");
-              await amazonPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: 90_000 });
-              await dumpPageInfo(amazonPage, "amazon_tab_after_nav");
-              await safeScreenshot(amazonPage, `screenshots/pubby_amazon_tab_${Date.now()}.png`);
-              console.log("=== STAGE 12: View On Amazon DEBUG SUCCESS ===");
+              await safeScreenshot(page, `screenshots/pubby_after_login_${Date.now()}.png`);
+
+              // Stage 2: Verify login
+              console.log("Stage 2: Verifying login...");
+              const dash = await page.$('a.logout, .dashboard');
+              if (!dash) {
+                console.warn("Stage 2: Login may have failed.");
+                await safeScreenshot(page, `screenshots/pubby_login_failed_${Date.now()}.png`);
+              }
+
+              // Stage 3: Browse page
+              console.log("Stage 3: Navigating to browse page:", browseUrl);
+              await page.goto(browseUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+              await sleep(10000);
+              await safeScreenshot(page, `screenshots/pubby_browse_${Date.now()}.png`);
+
+              // Stage 4: Kindle Unlimited filter
+              console.log("Stage 4: Clicking 'Kindle Unlimited' filter…");
+              await page.evaluate(() => {
+                const tag = Array.from(document.querySelectorAll('.browsing-tag'))
+                  .find(t => t.querySelector('.label')?.innerText.trim() === 'Kindle Unlimited');
+                if (tag) tag.click();
+              });
+              await sleep(5000);
+              await safeScreenshot(page, `screenshots/pubby_kindle_unlimited_${Date.now()}.png`);
+
+              // Stage 5: Most Snaps filter
+              console.log("Stage 5: Clicking 'Most Snaps' filter…");
+              await page.evaluate(() => {
+                const tag = Array.from(document.querySelectorAll('.browsing-tag'))
+                  .find(t => t.querySelector('.label')?.innerText.trim() === 'Most Snaps');
+                if (tag) tag.click();
+              });
+              await sleep(5000);
+              await safeScreenshot(page, `screenshots/pubby_most_snaps_${Date.now()}.png`);
+
+              // Stage 6: Wait for books container
+              console.log("Stage 6: Waiting for books container…");
+              await page.waitForSelector('.library-books-container', { visible: true, timeout: 60000 });
+              await safeScreenshot(page, `screenshots/pubby_browse_loaded_${Date.now()}.png`);
+              await sleep(5000);
+
+              // Stage 7: Scroll to load more
+              for (let i = 0; i < 3; i++) {
+                console.log(`Stage 7: Scrolling iteration ${i+1}`);
+                await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+                await sleep(3000);
+                await safeScreenshot(page, `screenshots/pubby_scroll_${i+1}_${Date.now()}.png`);
+              }
+
+              // Stage 8: Extract recommended book titles
+              console.log("Stage 8: Extracting Recommended Books…");
+              const recommended = await page.evaluate(() =>
+                Array.from(document.querySelectorAll('.library-books-container .card .title-text'))
+                  .map(el => el.innerText.trim())
+              );
+              console.log("Stage 8: Recommended Books:", recommended);
+              await safeScreenshot(page, `screenshots/pubby_books_extracted_${Date.now()}.png`);
+
+              // Stage 9: Extract activity timeline
+              console.log("Stage 9: Extracting Activity Timeline…");
+              const timeline = await page.evaluate(() =>
+                Array.from(document.querySelectorAll('.timeline .event'))
+                  .map(ev => ({
+                    content: ev.querySelector('.content')?.innerText.trim() || '',
+                    time: ev.querySelector('.time')?.innerText.trim() || ''
+                  }))
+              );
+              console.log("Stage 9: Activity Timeline:", timeline);
+              await safeScreenshot(page, `screenshots/pubby_activity_extracted_${Date.now()}.png`);
+
+              // Stage 10: Pick a Kindle Unlimited book
+              console.log("Stage 10: Scanning for Kindle Unlimited cards…");
+              const kuHandle = await page.evaluateHandle(xpath => {
+                const res = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                return Array.from({ length: res.snapshotLength }, (_, i) => res.snapshotItem(i));
+              }, "//div[contains(@class,'card') and .//span[contains(@class,'verified-price') and normalize-space(text())='Kindle Unlimited']]");
+              const kuProps = await kuHandle.getProperties();
+              for (const prop of kuProps.values()) {
+                const el = prop.asElement();
+                if (el) {
+                  await el.click();
+                  break;
+                }
+              }
+              await sleep(2000);
+              await safeScreenshot(page, `screenshots/pubby_ku_card_clicked_${Date.now()}.png`);
+
+              // Stage 11: Click 'Pick Book' & open Reader
+              console.log("Stage 11: Clicking 'Pick Book'…");
+              const pickHandle = await page.evaluateHandle(xpath => {
+                const res = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+                return Array.from({ length: res.snapshotLength }, (_, i) => res.snapshotItem(i));
+              }, "//div[contains(@class,'action-blue') and normalize-space(text())='Pick Book']");
+              const pickProps = await pickHandle.getProperties();
+              for (const prop of pickProps.values()) {
+                const el = prop.asElement();
+                if (el) {
+                  await el.click();
+                  break;
+                }
+              }
+              await sleep(2000);
+              await safeScreenshot(page, `screenshots/pubby_pick_book_clicked_${Date.now()}.png`);
+
+              console.log("Stage 11b: Clicking 'Reader' tab…");
+              await page.evaluate(() => {
+                const tab = Array.from(document.querySelectorAll('.section-container .section-label'))
+                  .find(el => el.innerText.trim() === 'Reader');
+                if (tab) tab.click();
+              });
+              await page.waitForSelector('.section-container .pages-container .page-label.current-page', { visible: true, timeout: 60000 });
+              await safeScreenshot(page, `screenshots/pubby_reader_loaded_${Date.now()}.png`);
+              const clickedReader = await page.evaluate(() => {
+                const curr = document.querySelector('.section-container .pages-container .page-label.current-page');
+                if (curr) { curr.click(); return true; }
+                return false;
+              });
+              if (!clickedReader) {
+                console.error("Stage 11b ERROR: Could not click current page in Reader");
+              } else {
+                await safeScreenshot(page, `screenshots/pubby_reader_clicked_${Date.now()}.png`);
+              }
+
+              // Stage 12: View On Amazon (attach-before-click)
+              console.log("=== STAGE 12: View On Amazon DEBUG START ===");
+              await dumpPageInfo(page, "before_click");
+              await page.waitForSelector('.action.copy-amazon-link', { visible: true, timeout: 60000 });
+              await safeScreenshot(page, `screenshots/pubby_before_amazon_${Date.now()}.png`);
+              try {
+                // 1) Start listening for a new target
+                const targetPromise = browser.waitForTarget(
+                  t => /amazon\.co/.test(t.url()),
+                  { timeout: 90000 }
+                );
+                // 2) Click
+                await page.click('.action.copy-amazon-link');
+                // 3) Await the new target
+                const newTarget = await targetPromise;
+                console.log("Stage 12: New target detected:", newTarget.url());
+                const newPage = await newTarget.page();
+                if (!newPage) throw new Error("Failed to get newPage from target");
+                // 4) Debug & screenshot
+                await dumpPageInfo(newPage, "amazon_tab_before_nav");
+                await newPage.bringToFront();
+                await newPage.waitForNavigation({ waitUntil: 'networkidle2', timeout: 90000 });
+                await dumpPageInfo(newPage, "amazon_tab_after_nav");
+                await safeScreenshot(newPage, `screenshots/pubby_amazon_tab_${Date.now()}.png`);
+                console.log("=== STAGE 12: View On Amazon DEBUG SUCCESS ===");
+              } catch (stageErr) {
+                console.error("!!! ERROR in STAGE 12 DEBUG !!!", stageErr);
+                await dumpPageInfo(page, "stage12_error_page");
+                await safeScreenshot(page, `screenshots/pubby_amazon_error_${Date.now()}.png`);
+                console.log("Stage 12: Targets after error:");
+                (await browser.targets()).forEach((t, i) =>
+                  console.log(`  [${i}] type=${t.type()} url=${t.url()}`)
+                );
+              }
 
             } catch (err) {
               console.error("Script-level error:", err);
@@ -88,7 +249,7 @@ jobs:
               if (page) {
                 try {
                   const finalHtml = await page.content();
-                  fs.writeFileSync(`debug/final_page_\${Date.now()}.html`, finalHtml);
+                  fs.writeFileSync(`debug/final_page_${Date.now()}.html`, finalHtml);
                 } catch {}
               }
               if (browser) await browser.close();
@@ -106,7 +267,7 @@ jobs:
             }
             await loginAndBrowse(loginUrl, browseUrl, username, password);
           })();
-          EOL
+          EOF
 
       - name: Run Puppeteer script
         env:
