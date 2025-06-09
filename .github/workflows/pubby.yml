@@ -62,7 +62,7 @@ jobs:
           async function loginAndBrowse(loginUrl, browseUrl, username, password) {
             let browser, page;
             try {
-              // Launch browser maximized
+              // Launch browser
               browser = await puppeteer.launch({
                 headless: 'new',
                 defaultViewport: null,
@@ -76,12 +76,12 @@ jobs:
               await page.goto(loginUrl, { waitUntil: 'networkidle2', timeout: 60000 });
               await safeScreenshot(page, `screenshots/pubby_home_${Date.now()}.png`);
               console.log("Stage 1: Filling in login credentials...");
-              await page.type('input[name=\"email\"]', username, { delay: 100 });
-              await page.type('input[name=\"password\"]', password, { delay: 100 });
+              await page.type('input[name="email"]', username, { delay: 100 });
+              await page.type('input[name="password"]', password, { delay: 100 });
               await safeScreenshot(page, `screenshots/pubby_credentials_filled_${Date.now()}.png`);
               console.log("Stage 1: Submitting login form...");
               await Promise.all([
-                page.click('button[type=\"submit\"]'),
+                page.click('button[type="submit"]'),
                 page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 })
               ]);
               await safeScreenshot(page, `screenshots/pubby_after_login_${Date.now()}.png`);
@@ -159,9 +159,7 @@ jobs:
               console.log("Stage 10: Scanning for Kindle Unlimited cards…");
               const kuHandle = await page.evaluateHandle(xpath => {
                 const res = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-                return Array.from({ length: res.snapshotLength }, (_, i) => 
-                  res.snapshotItem(i)
-                );
+                return Array.from({ length: res.snapshotLength }, (_, i) => res.snapshotItem(i));
               }, "//div[contains(@class,'card') and .//span[contains(@class,'verified-price') and normalize-space(text())='Kindle Unlimited']]");
               const kuProps = await kuHandle.getProperties();
               for (const prop of kuProps.values()) {
@@ -175,9 +173,7 @@ jobs:
               console.log("Stage 11: Clicking 'Pick Book'…");
               const pickHandle = await page.evaluateHandle(xpath => {
                 const res = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-                return Array.from({ length: res.snapshotLength }, (_, i) => 
-                  res.snapshotItem(i)
-                );
+                return Array.from({ length: res.snapshotLength }, (_, i) => res.snapshotItem(i));
               }, "//div[contains(@class,'action-blue') and normalize-space(text())='Pick Book']");
               const pickProps = await pickHandle.getProperties();
               for (const prop of pickProps.values()) {
@@ -209,32 +205,27 @@ jobs:
                 await safeScreenshot(page, `screenshots/pubby_reader_clicked_${Date.now()}.png`);
               }
 
-              // Stage 12: View On Amazon (fixed regex, wait-for-existence)
+              // Stage 12: View On Amazon (selector-based wait)
               console.log("=== STAGE 12: View On Amazon DEBUG START ===");
               await dumpPageInfo(page, "before_click");
               await page.waitForSelector('.action.copy-amazon-link', { visible: true, timeout: 60000 });
               await safeScreenshot(page, `screenshots/pubby_before_amazon_${Date.now()}.png`);
-
               try {
-                // Start listening for the new Amazon target
+                console.log("Stage 12: Waiting for new Amazon target...");
                 const targetPromise = browser.waitForTarget(
-                  t => /amazon\.co/.test(t.url()),
+                  t => /amazon\\.co/.test(t.url()),
                   { timeout: 90000 }
                 );
-                // Click the View On Amazon button
                 await page.click('.action.copy-amazon-link');
-                // Await the newly opened target
                 const newTarget = await targetPromise;
                 console.log("Stage 12: New target detected:", newTarget.url());
-
                 const newPage = await newTarget.page();
                 if (!newPage) throw new Error("Failed to get newPage from target");
-
                 await dumpPageInfo(newPage, "amazon_tab_before_nav");
+                console.log("Stage 12: Bringing new tab to front…");
                 await newPage.bringToFront();
-
-                // Wait for the element to exist in the DOM
-                await newPage.waitForSelector('#productTitle', { timeout: 90000 });
+                // Wait for the Amazon product title to appear
+                await newPage.waitForSelector('#productTitle', { visible: true, timeout: 90000 });
                 await safeScreenshot(newPage, `screenshots/pubby_amazon_tab_${Date.now()}.png`);
                 console.log("=== STAGE 12: View On Amazon DEBUG SUCCESS ===");
               } catch (stageErr) {
