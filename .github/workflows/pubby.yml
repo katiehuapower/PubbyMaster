@@ -2,7 +2,7 @@ name: Pubby.co Login, Browse & Pick Kindle Unlimited Book & View On Amazon Autom
 
 on:
   schedule:
-    - cron: '*/10 * * * *'   # every 10 minutes
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -39,89 +39,74 @@ jobs:
           async function safeScreenshot(page, path) {
             try {
               await page.screenshot({ path, fullPage: true });
-              console.log(\`Screenshot taken: \${path}\`);
+              console.log(`Screenshot taken: ${path}`);
             } catch (e) {
-              console.error(\`Screenshot error: \${e.message}\`);
+              console.error(`Screenshot error: ${e.message}`);
             }
           }
 
           async function dumpPageInfo(page, label) {
             try {
-              console.log(\`[\${label}] URL: \${page.url()}\`);
+              console.log(`[${label}] URL: ${page.url()}`);
               const html = await page.content();
-              const filename = \`debug/\${label.replace(/\\s+/g,'_')}_\${Date.now()}.html\`;
+              const filename = `debug/${label.replace(/\s+/g,'_')}_${Date.now()}.html`;
               fs.writeFileSync(filename, html);
-              console.log(\`[\${label}] HTML dumped to \${filename}\`);
+              console.log(`[${label}] HTML dumped to ${filename}`);
               const cookies = await page.cookies();
-              console.log(\`[\${label}] Cookies:\`, cookies);
+              console.log(`[${label}] Cookies:`, cookies);
             } catch (e) {
-              console.error(\`Error dumping page info for \${label}: \${e.message}\`);
+              console.error(`Error dumping page info for ${label}: ${e.message}`);
             }
           }
 
           async function loginAndBrowse(loginUrl, browseUrl, username, password) {
-            let browser, page;
+            const browser = await puppeteer.launch({
+              headless: 'new',
+              defaultViewport: null,
+              args: ['--no-sandbox','--disable-setuid-sandbox','--start-maximized']
+            });
+            const page = await browser.newPage();
+            await page.setViewport({ width: 1920, height: 1080 });
+
+            // … Stages 1–11 unchanged …
+
+            // Stage 12: View On Amazon (fixed regex, wait-for-existence)
+            console.log("=== STAGE 12: View On Amazon DEBUG START ===");
+            await dumpPageInfo(page, "before_click");
+            await page.waitForSelector('.action.copy-amazon-link',{ visible: true, timeout: 60000 });
+            await safeScreenshot(page, `screenshots/pubby_before_amazon_${Date.now()}.png`);
+
             try {
-              browser = await puppeteer.launch({
-                headless: 'new',
-                defaultViewport: null,
-                args: ['--no-sandbox', '--disable-setuid-sandbox','--start-maximized']
-              });
-              page = await browser.newPage();
-              await page.setViewport({ width: 1920, height: 1080 });
+              const targetPromise = browser.waitForTarget(
+                t => /amazon\.co/.test(t.url()),
+                { timeout: 90000 }
+              );
+              await page.click('.action.copy-amazon-link');
+              const newTarget = await targetPromise;
+              console.log("Stage 12: New target detected:", newTarget.url());
 
-              // … Stages 1–11 identical to before …
+              const newPage = await newTarget.page();
+              if (!newPage) throw new Error("No Page object for Amazon tab");
 
-              // Stage 12: View On Amazon (element-exists wait)
-              console.log("=== STAGE 12: View On Amazon DEBUG START ===");
-              await dumpPageInfo(page, "before_click");
-              await page.waitForSelector('.action.copy-amazon-link',{ visible: true, timeout: 60000 });
-              await safeScreenshot(page, `screenshots/pubby_before_amazon_${Date.now()}.png`);
+              await dumpPageInfo(newPage, "amazon_tab_before_nav");
+              await newPage.bringToFront();
 
-              try {
-                // 1) start listening for new tab
-                const targetPromise = browser.waitForTarget(
-                  t => /amazon\.co/.test(t.url()),
-                  { timeout: 90000 }
-                );
-                // 2) click the button
-                await page.click('.action.copy-amazon-link');
-                // 3) get the new target
-                const newTarget = await targetPromise;
-                console.log("Stage 12: New target detected:", newTarget.url());
+              // Only wait for the element to exist in the DOM
+              await newPage.waitForSelector('#productTitle', { timeout: 90000 });
+              await safeScreenshot(newPage, `screenshots/pubby_amazon_tab_${Date.now()}.png`);
+              console.log("=== STAGE 12: View On Amazon DEBUG SUCCESS ===");
 
-                const newPage = await newTarget.page();
-                if (!newPage) throw new Error("Failed to get newPage from target");
-
-                await dumpPageInfo(newPage, "amazon_tab_before_nav");
-                await newPage.bringToFront();
-
-                // ← **Changed**: wait for existence only, not visibility
-                await newPage.waitForSelector('#productTitle', { timeout: 90000 });
-                await safeScreenshot(newPage, `screenshots/pubby_amazon_tab_${Date.now()}.png`);
-
-                console.log("=== STAGE 12: View On Amazon DEBUG SUCCESS ===");
-              } catch (stageErr) {
-                console.error("!!! ERROR in STAGE 12 DEBUG !!!", stageErr);
-                await dumpPageInfo(page, "stage12_error_page");
-                await safeScreenshot(page, `screenshots/pubby_amazon_error_${Date.now()}.png`);
-                console.log("Stage 12: Targets after error:");
-                (await browser.targets()).forEach((t, i) =>
-                  console.log(\`  [\${i}] type=\${t.type()} url=\${t.url()}\`)
-                );
-              }
-
-            } catch (err) {
-              console.error("Script-level error:", err);
-            } finally {
-              if (page) {
-                try {
-                  const finalHtml = await page.content();
-                  fs.writeFileSync(\`debug/final_page_\${Date.now()}.html\`, finalHtml);
-                } catch {}
-              }
-              if (browser) await browser.close();
+            } catch (e) {
+              console.error("!!! ERROR in STAGE 12 DEBUG !!!", e);
+              await dumpPageInfo(page, "stage12_error_page");
+              await safeScreenshot(page, `screenshots/pubby_amazon_error_${Date.now()}.png`);
+              console.log("Stage 12: Targets after error:");
+              (await browser.targets()).forEach((t,i)=>
+                console.log(`  [${i}] type=${t.type()} url=${t.url()}`)
+              );
             }
+
+            await browser.close();
           }
 
           (async () => {
@@ -129,7 +114,7 @@ jobs:
             const browseUrl = process.env.PUBBY_BROWSE_URL;
             const username  = process.env.PUBBY_USERNAME;
             const password  = process.env.PUBBY_PASSWORD;
-            if (!username || !password) {
+            if (!username||!password) {
               console.error("Missing credentials");
               process.exit(1);
             }
