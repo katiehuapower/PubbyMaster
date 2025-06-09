@@ -47,15 +47,15 @@ jobs:
 
           async function dumpPageInfo(page, label) {
             try {
-              console.log(\`[\${label}] URL: \${page.url()}\`);
+              console.log(`[${label}] URL: ${page.url()}`);
               const html = await page.content();
-              const filename = \`debug/\${label.replace(/\s+/g,'_')}_\${Date.now()}.html\`;
+              const filename = `debug/${label.replace(/\s+/g,'_')}_${Date.now()}.html`;
               fs.writeFileSync(filename, html);
-              console.log(\`[\${label}] HTML dumped to \${filename}\`);
+              console.log(`[${label}] HTML dumped to ${filename}`);
               const cookies = await page.cookies();
-              console.log(\`[\${label}] Cookies:\`, cookies);
+              console.log(`[${label}] Cookies:`, cookies);
             } catch (e) {
-              console.error(\`Error dumping page info for \${label}: \${e.message}\`);
+              console.error(`Error dumping page info for ${label}: ${e.message}`);
             }
           }
 
